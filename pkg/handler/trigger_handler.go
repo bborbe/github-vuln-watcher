@@ -12,7 +12,6 @@ import (
 	"github.com/bborbe/errors"
 	"github.com/bborbe/run"
 	"github.com/golang/glog"
-	"github.com/gorilla/mux"
 
 	"github.com/bborbe/github-vuln-watcher/pkg"
 )
@@ -79,7 +78,6 @@ func (h *triggerHandler) ServeHTTP(
 	resp http.ResponseWriter,
 	req *http.Request,
 ) error {
-	_ = mux.Vars(req)
 	forceStr := req.URL.Query().Get("force")
 	force := forceStr == "true" || forceStr == "1"
 	if !h.gate.TryAcquire() {
@@ -87,8 +85,10 @@ func (h *triggerHandler) ServeHTTP(
 		resp.Header().Set("Content-Type", "application/json")
 		resp.WriteHeader(http.StatusConflict)
 		return json.NewEncoder(resp).Encode(map[string]interface{}{
-			"status": "conflict",
-			"error":  "a poll cycle is already running",
+			"error": map[string]interface{}{
+				"code":    "CONFLICT",
+				"message": "a poll cycle is already running",
+			},
 		})
 	}
 	if err := h.runner.Run(run.CatchPanic(func(ctx context.Context) error {
@@ -99,12 +99,14 @@ func (h *triggerHandler) ServeHTTP(
 		return nil
 	})); err != nil {
 		h.gate.Release()
-		glog.Errorf("failed to start forced poll cycle force=%t err=%v", force, err)
+		// the returned error is logged by the httpAdapter wrapper — do not log twice.
 		resp.Header().Set("Content-Type", "application/json")
 		resp.WriteHeader(http.StatusInternalServerError)
 		return json.NewEncoder(resp).Encode(map[string]interface{}{
-			"status": "error",
-			"error":  "failed to start poll cycle",
+			"error": map[string]interface{}{
+				"code":    "INTERNAL",
+				"message": "failed to start poll cycle",
+			},
 		})
 	}
 	glog.Warningf("forced poll cycle accepted force=%t", force)

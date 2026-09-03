@@ -5,6 +5,7 @@
 package pkg
 
 import (
+	"bytes"
 	"context"
 	stderrors "errors"
 	"fmt"
@@ -116,6 +117,33 @@ func configureSubprocess(cmd *exec.Cmd) {
 	cmd.WaitDelay = 5 * time.Second
 }
 
+// maxGateOutputBytes bounds the captured stdout+stderr of each gate
+// subprocess. The 20-minute timeout bounds duration, not volume — an
+// attacker-controlled or supply-chain-compromised Makefile printing
+// unbounded output would otherwise exhaust pod memory (deploy manifest ships
+// a 50Mi limit). Markers (GO-/CVE- ids) fit far within the cap.
+const maxGateOutputBytes = 4 << 20
+
+// cappedWriter discards writes beyond max bytes, bounding memory while
+// preserving the leading output the marker classification reads.
+type cappedWriter struct {
+	buf       *bytes.Buffer
+	remaining int
+}
+
+func (w *cappedWriter) Write(p []byte) (int, error) {
+	if w.remaining <= 0 {
+		return len(p), nil
+	}
+	n := len(p)
+	if n > w.remaining {
+		n = w.remaining
+	}
+	w.buf.Write(p[:n])
+	w.remaining -= n
+	return len(p), nil
+}
+
 func (s *scanner) Scan(ctx context.Context, repo Repo) (ScanResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.gateTimeout)
 	defer cancel()
@@ -160,7 +188,7 @@ func (s *scanner) Scan(ctx context.Context, repo Repo) (ScanResult, error) {
 		return ScanResult{}, ErrCloneFailed
 	}
 
-	var combined strings.Builder
+	var combined bytes.Buffer
 	anyGateFailed := false
 	for _, target := range []string{"vulncheck", "check"} {
 		// #nosec G204 -- make binary is hardcoded; target is a fixed loop
@@ -169,8 +197,10 @@ func (s *scanner) Scan(ctx context.Context, repo Repo) (ScanResult, error) {
 		gate.Dir = cloneDir
 		gate.Env = scanEnv()
 		configureSubprocess(gate)
-		out, gerr := gate.CombinedOutput()
-		combined.Write(out)
+		capw := &cappedWriter{buf: &combined, remaining: maxGateOutputBytes}
+		gate.Stdout = capw
+		gate.Stderr = capw
+		gerr := gate.Run()
 		if gerr != nil {
 			if ctx.Err() != nil {
 				return ScanResult{}, ErrGateTimeout
