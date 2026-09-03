@@ -1,4 +1,8 @@
-FROM golang:1.27.0 AS build
+ARG DOCKER_REGISTRY=docker.prod.nuke.benjamin-borbe.de:443
+FROM ${DOCKER_REGISTRY}/golang:1.27.0 AS build
+ARG BUILD_GIT_VERSION=dev
+ARG BUILD_GIT_COMMIT=none
+ARG BUILD_DATE=unknown
 WORKDIR /workspace
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
@@ -12,16 +16,36 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -o /main
 CMD ["/bin/bash"]
 
-FROM alpine:3.24 AS alpine
-RUN apk --no-cache add ca-certificates
+FROM ${DOCKER_REGISTRY}/golang:1.27.0 AS toolchain
+# Go toolchain snapshot for the runtime: the watcher runs each repo's own
+# `make vulncheck` + `make check`, whose scanners/linters mostly run via
+# `go run tool@version` — the runtime needs a full Go toolchain.
 
-FROM scratch
+FROM ${DOCKER_REGISTRY}/alpine:3.24 AS runtime
+# Runtime toolchain: the watcher clones each consenting repo (git) and runs
+# its own vuln gates (`make vulncheck` + `make check`). Most scanners/linters
+# run via `go run tool@version` from the repo's Makefile — only trivy must be
+# a system binary (the metrics lesson: trivy's dep-level scan catches
+# indirect-dep vulns govulncheck misses). gcc + musl-dev: repo gates run
+# `go test -race`, which requires cgo. gh + jq: repo gates shell out to them.
+# No Claude CLI / npm / X11 headers: this service emits tasks, it does not
+# create PRs or compile GUI libs — leaner than the github-update-go-agent image.
+RUN apk --no-cache add ca-certificates curl bash git make gcc musl-dev github-cli jq \
+ && curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+  | sh -s -- -b /usr/local/bin \
+ && trivy --version
+COPY --from=toolchain /usr/local/go /usr/local/go
+ENV ZONEINFO=/zoneinfo.zip
+COPY --from=toolchain /usr/local/go/lib/time/zoneinfo.zip /
+ENV PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
+
+FROM runtime
 ARG BUILD_GIT_VERSION=dev
 ARG BUILD_GIT_COMMIT=none
 ARG BUILD_DATE=unknown
 
-LABEL org.opencontainers.image.title="Skeleton"
-LABEL org.opencontainers.image.description="Go microservice github-vuln-watcher/demonstration project"
+LABEL org.opencontainers.image.title="github-vuln-watcher"
+LABEL org.opencontainers.image.description="Go vuln-drift detection watcher: clones consenting repos, runs their vuln gates, emits github-update-go tasks"
 LABEL org.opencontainers.image.vendor="Benjamin Borbe"
 LABEL org.opencontainers.image.licenses="BSD-2-Clause"
 LABEL org.opencontainers.image.source="https://github.com/bborbe/github-vuln-watcher"
@@ -31,9 +55,6 @@ LABEL org.opencontainers.image.created="${BUILD_DATE}"
 LABEL org.opencontainers.image.revision="${BUILD_GIT_COMMIT}"
 
 COPY --from=build /main /main
-COPY --from=alpine /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build /usr/local/go/lib/time/zoneinfo.zip /
-ENV ZONEINFO=/zoneinfo.zip
 ENV BUILD_GIT_VERSION=${BUILD_GIT_VERSION}
 ENV BUILD_GIT_COMMIT=${BUILD_GIT_COMMIT}
 ENV BUILD_DATE=${BUILD_DATE}
