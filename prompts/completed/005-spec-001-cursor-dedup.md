@@ -1,8 +1,13 @@
 ---
-status: approved
-spec: ["001"]
+status: completed
+spec: [001-vuln-drift-watcher]
+summary: Implemented the JSON dedup cursor (atomic persist, corrupt recovery), the finding_set_unchanged filter composed per-cycle in Poll, and a real-git/real-make fixture dispatch integration test proving the emit contract, skip-reason deltas and dedup end-to-end
+execution_id: github-vuln-watcher-vuln-drift-watcher-exec-005-spec-001-cursor-dedup
+dark-factory-version: dev
 created: "2026-09-03T20:30:00Z"
 queued: "2026-09-03T18:43:31Z"
+started: "2026-09-03T19:31:42Z"
+completed: "2026-09-03T19:48:34Z"
 ---
 
 <summary>

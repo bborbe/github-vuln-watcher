@@ -1,6 +1,6 @@
 ---
 status: completed
-spec: ["001"]
+spec: [001-vuln-drift-watcher]
 summary: 'Reworked the scaffold binary into the vuln-drift watcher service shell: full env config surface, single-cycle poll loop (immediate first cycle, 12h default/24h ceiling), POST /trigger endpoint with CycleGate single-writer lock, four-counter Prometheus metrics scaffold, and consolidated CreateRouter route table with BoltDB/DATADIR/BATCH_SIZE removed'
 execution_id: github-vuln-watcher-vuln-drift-watcher-exec-001-spec-001-skeleton
 dark-factory-version: dev

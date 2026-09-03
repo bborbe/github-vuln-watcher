@@ -29,11 +29,10 @@ type Watcher interface {
 
 // NewWatcher wires the cycle's collaborators. taskCreationFilter is the
 // cycle-invariant pre-scan chain built at wiring time; the finding-set dedup
-// filter is composed in per cycle because it needs a fresh cursor (and is
-// omitted on a forced cycle) — that layer arrives in a later prompt.
-// scanner is the signal-stage collaborator that clones each consenting repo
-// and runs its own vuln gates. publisher emits one CreateTaskCommand per
-// finding set after the scan.
+// filter is composed per cycle because it needs a fresh cursor (and is
+// omitted on a forced cycle). scanner is the signal-stage collaborator that
+// clones each consenting repo and runs its own vuln gates. publisher emits
+// one CreateTaskCommand per finding set after the scan.
 func NewWatcher(
 	ghClient GitHubClient,
 	scanner Scanner,
@@ -65,6 +64,17 @@ type watcher struct {
 }
 
 func (w *watcher) Poll(ctx context.Context, force bool) error {
+	cursorState, err := LoadCursor(ctx, w.cursorPath)
+	if err != nil {
+		w.metrics.IncPollCycle("scan_error")
+		glog.Errorf(
+			"poll cycle aborted: load cursor path=%s err=%v",
+			w.cursorPath,
+			err,
+		)
+		return nil
+	}
+
 	repos, err := w.ghClient.ListRepos(ctx, w.owner)
 	if err != nil {
 		if stderrors.Is(err, ErrRateLimited) {
@@ -86,8 +96,35 @@ func (w *watcher) Poll(ctx context.Context, force bool) error {
 
 	w.metrics.IncReposScanned(len(repos))
 
-	if abortReason := w.processRepos(ctx, repos, w.taskCreationFilter); abortReason != "" {
+	// The finding-set dedup filter is evaluated post-scan (it needs the
+	// computed task identifier) and is omitted entirely on a forced cycle
+	// (spec DB 5). An empty dedupFilter never skips.
+	dedupFilter := filter.TaskCreationFilterList{}
+	if !force {
+		dedupFilter = append(
+			dedupFilter,
+			filter.NewFindingSetUnchangedFilter(NewCursorReader(cursorState)),
+		)
+	}
+
+	if abortReason := w.processRepos(
+		ctx,
+		cursorState,
+		repos,
+		w.taskCreationFilter,
+		dedupFilter,
+	); abortReason != "" {
 		w.metrics.IncPollCycle(abortReason)
+		return nil
+	}
+
+	if err := SaveCursor(ctx, w.cursorPath, cursorState); err != nil {
+		w.metrics.IncPollCycle("scan_error")
+		glog.Errorf(
+			"poll cycle aborted: save cursor path=%s err=%v",
+			w.cursorPath,
+			err,
+		)
 		return nil
 	}
 
@@ -98,8 +135,10 @@ func (w *watcher) Poll(ctx context.Context, force bool) error {
 
 func (w *watcher) processRepos(
 	ctx context.Context,
+	cursorState *Cursor,
 	repos []Repo,
 	cycleFilter filter.TaskCreationFilter,
+	dedupFilter filter.TaskCreationFilter,
 ) string {
 	for _, repo := range repos {
 		select {
@@ -155,13 +194,32 @@ func (w *watcher) processRepos(
 		candidate.VulnIDs = scanResult.VulnIDs
 		w.metrics.IncVulnsDetected(len(scanResult.VulnIDs))
 
+		// Finding-set dedup: evaluated post-scan because it needs the
+		// computed task identifier. An empty dedupFilter (forced cycle)
+		// never skips.
+		if reason := dedupFilter.Skip(candidate.FilterCandidate()); reason != "" {
+			w.metrics.IncFilterSkipped(reason)
+			glog.V(2).Infof(
+				"repo skipped repo=%s reason=%s",
+				repo.Key(),
+				reason,
+			)
+			continue
+		}
+
 		// PublishCreate emits one CreateTaskCommand for this finding set and
-		// reports whether the send succeeded. The dedup layer (next prompt)
-		// records the emitted task identifier in the cursor here, only on a
-		// successful publish; a failed publish returns false and does not
-		// advance cursor state (next cycle re-emits; the deterministic
-		// identifier absorbs the repeat downstream).
-		_ = w.publisher.PublishCreate(ctx, candidate)
+		// reports whether the send succeeded. The cursor entry is recorded
+		// only on a successful publish; a failed publish returns false and
+		// does not advance cursor state (next cycle re-emits; the
+		// deterministic identifier absorbs the repeat downstream).
+		if w.publisher.PublishCreate(ctx, candidate) {
+			if cursorState.Repos == nil {
+				cursorState.Repos = make(map[string]*RepoState)
+			}
+			cursorState.Repos[repo.Key()] = &RepoState{
+				LastEmittedTaskIdentifier: candidate.TaskIdentifier(),
+			}
+		}
 	}
 	return ""
 }

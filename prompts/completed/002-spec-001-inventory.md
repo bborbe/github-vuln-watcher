@@ -1,6 +1,6 @@
 ---
 status: completed
-spec: ["001"]
+spec: [001-vuln-drift-watcher]
 summary: 'Added the inventory layer: GitHub App auth resolution (pkg/auth), read-only repo-listing and file-fetching client (pkg/githubclient), the pre-clone filter chain (pkg/filter: allowlist/consent/go.mod) and the watcher cycle that inventories the owner''s repos and applies the filters before any clone'
 execution_id: github-vuln-watcher-vuln-drift-watcher-exec-002-spec-001-inventory
 dark-factory-version: dev

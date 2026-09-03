@@ -112,6 +112,59 @@ var _ = Describe("TaskCreationFilterList", func() {
 	})
 })
 
+// cursorReaderStub is a hand-written CursorReader fake for the filter unit
+// tests — the production reader (pkg.NewCursorReader) is exercised by the
+// watcher integration tests.
+type cursorReaderStub struct {
+	lastEmitted map[string]string
+}
+
+func (s *cursorReaderStub) LastEmittedTaskIdentifier(repoKey string) string {
+	return s.lastEmitted[repoKey]
+}
+
+var _ = Describe("NewFindingSetUnchangedFilter", func() {
+	var cursor *cursorReaderStub
+	var f filter.TaskCreationFilter
+
+	BeforeEach(func() {
+		cursor = &cursorReaderStub{
+			lastEmitted: map[string]string{
+				"github.com/bborbe/repo-a": "11111111-2222-4333-8444-555555555555",
+			},
+		}
+		f = filter.NewFindingSetUnchangedFilter(cursor)
+	})
+
+	It("skips a candidate whose task identifier equals the recorded one", func() {
+		Expect(f.Skip(filter.Candidate{
+			RepoKey:        "github.com/bborbe/repo-a",
+			TaskIdentifier: "11111111-2222-4333-8444-555555555555",
+		})).To(Equal("finding_set_unchanged"))
+	})
+
+	It("passes a candidate with a different task identifier", func() {
+		Expect(f.Skip(filter.Candidate{
+			RepoKey:        "github.com/bborbe/repo-a",
+			TaskIdentifier: "99999999-8888-4777-8666-555555555555",
+		})).To(Equal(""))
+	})
+
+	It("never skips on an empty task identifier", func() {
+		Expect(f.Skip(filter.Candidate{
+			RepoKey:        "github.com/bborbe/repo-a",
+			TaskIdentifier: "",
+		})).To(Equal(""))
+	})
+
+	It("passes a repo the cursor has never seen", func() {
+		Expect(f.Skip(filter.Candidate{
+			RepoKey:        "github.com/bborbe/repo-b",
+			TaskIdentifier: "11111111-2222-4333-8444-555555555555",
+		})).To(Equal(""))
+	})
+})
+
 var _ = Describe("ParseConsent", func() {
 	It("returns granted for explicit boolean true", func() {
 		consent, err := filter.ParseConsent(context.Background(),

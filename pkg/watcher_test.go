@@ -7,6 +7,8 @@ package pkg_test
 import (
 	"context"
 	stderrors "errors"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/onsi/ginkgo/v2"
@@ -23,15 +25,18 @@ var _ = ginkgo.Describe("Watcher", func() {
 		ctx         context.Context
 		watcher     pkg.Watcher
 		registry    *prometheus.Registry
+		metrics     pkg.Metrics
 		ghClient    *mocks.GitHubClient
 		scanner     *mocks.Scanner
 		publisher   *mocks.TaskPublisher
 		cycleFilter filter.TaskCreationFilter
+		cursorPath  string
 	)
 
 	ginkgo.BeforeEach(func() {
 		ctx = context.Background()
 		registry = prometheus.NewRegistry()
+		metrics = pkg.NewMetrics(registry)
 		ghClient = &mocks.GitHubClient{}
 		scanner = &mocks.Scanner{}
 		publisher = &mocks.TaskPublisher{}
@@ -41,12 +46,13 @@ var _ = ginkgo.Describe("Watcher", func() {
 			filter.NewAutoUpdateFilter(),
 			filter.NewGoModPresentFilter(),
 		}
+		cursorPath = filepath.Join(ginkgo.GinkgoT().TempDir(), "cursor.json")
 		watcher = pkg.NewWatcher(
 			ghClient,
 			scanner,
 			publisher,
-			pkg.NewMetrics(registry),
-			"/tmp/cursor.json",
+			metrics,
+			cursorPath,
 			"bborbe",
 			cycleFilter,
 		)
@@ -318,5 +324,141 @@ var _ = ginkgo.Describe("Watcher", func() {
 
 		Expect(gatherMetricValue(registry, "github_vuln_watcher_vulns_detected_total", nil)).
 			To(Equal(2.0))
+	})
+
+	ginkgo.It(
+		"persists the emitted identifier and dedups an unchanged finding set next cycle",
+		func() {
+			ghClient.ListReposReturns([]pkg.Repo{
+				{Owner: "bborbe", Name: "repo-a", DefaultBranch: "main"},
+			}, nil)
+			ghClient.GetGoModReturns([]byte("module example.com/x\n"), nil)
+			ghClient.GetMaintainerConfigReturns(filter.GrantedConsent, nil)
+			scanner.ScanReturns(pkg.ScanResult{
+				HeadSHA: strings.Repeat("a", 40),
+				VulnIDs: []string{"GO-2024-1234"},
+			}, nil)
+
+			Expect(watcher.Poll(ctx, false)).To(Succeed())
+			Expect(publisher.PublishCreateCallCount()).To(Equal(1))
+
+			data, err := os.ReadFile(cursorPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(data)).To(ContainSubstring("last_emitted_task_identifier"))
+
+			Expect(watcher.Poll(ctx, false)).To(Succeed())
+			Expect(publisher.PublishCreateCallCount()).To(Equal(1))
+			Expect(gatherMetricValue(registry,
+				"github_vuln_watcher_filter_skipped_total",
+				map[string]string{"reason": "finding_set_unchanged"})).To(Equal(1.0))
+		},
+	)
+
+	ginkgo.It("re-files an unchanged finding set on a forced cycle", func() {
+		ghClient.ListReposReturns([]pkg.Repo{
+			{Owner: "bborbe", Name: "repo-a", DefaultBranch: "main"},
+		}, nil)
+		ghClient.GetGoModReturns([]byte("module example.com/x\n"), nil)
+		ghClient.GetMaintainerConfigReturns(filter.GrantedConsent, nil)
+		scanner.ScanReturns(pkg.ScanResult{
+			HeadSHA: strings.Repeat("a", 40),
+			VulnIDs: []string{"GO-2024-1234"},
+		}, nil)
+
+		Expect(watcher.Poll(ctx, false)).To(Succeed())
+		Expect(publisher.PublishCreateCallCount()).To(Equal(1))
+
+		Expect(watcher.Poll(ctx, true)).To(Succeed())
+		Expect(publisher.PublishCreateCallCount()).To(Equal(2))
+		Expect(gatherMetricValue(registry,
+			"github_vuln_watcher_filter_skipped_total",
+			map[string]string{"reason": "finding_set_unchanged"})).To(Equal(0.0))
+	})
+
+	ginkgo.It("cold-starts from a corrupt cursor file and renames it to .corrupt", func() {
+		Expect(os.WriteFile(cursorPath, []byte("{not json"), 0o600)).To(Succeed())
+		ghClient.ListReposReturns([]pkg.Repo{
+			{Owner: "bborbe", Name: "repo-a", DefaultBranch: "main"},
+		}, nil)
+		ghClient.GetGoModReturns([]byte("module example.com/x\n"), nil)
+		ghClient.GetMaintainerConfigReturns(filter.GrantedConsent, nil)
+		scanner.ScanReturns(pkg.ScanResult{
+			HeadSHA: strings.Repeat("a", 40),
+			VulnIDs: []string{"GO-2024-1234"},
+		}, nil)
+
+		Expect(watcher.Poll(ctx, false)).To(Succeed())
+		Expect(cursorPath + ".corrupt").To(BeAnExistingFile())
+		Expect(gatherMetricValue(registry, "github_vuln_watcher_poll_cycle_total",
+			map[string]string{"result": "success"})).To(Equal(1.0))
+	})
+
+	ginkgo.It("counts scan_error when the cursor file cannot be read", func() {
+		dir := filepath.Join(ginkgo.GinkgoT().TempDir(), "cursor-dir")
+		Expect(os.MkdirAll(dir, 0o750)).To(Succeed())
+		watcher = pkg.NewWatcher(
+			ghClient, scanner, publisher, metrics, dir, "bborbe", cycleFilter,
+		)
+
+		Expect(watcher.Poll(ctx, false)).To(Succeed())
+		Expect(gatherMetricValue(registry, "github_vuln_watcher_poll_cycle_total",
+			map[string]string{"result": "scan_error"})).To(Equal(1.0))
+	})
+
+	ginkgo.It(
+		"does not advance the cursor entry on a failed publish and re-emits next cycle",
+		func() {
+			sender := &mocks.CreateCommandSender{}
+			sender.SendCommandReturns(stderrors.New("kafka down"))
+			realPublisher := pkg.NewTaskPublisher(
+				sender,
+				metrics,
+				pkg.TaskConfig{Stage: "dev"},
+			)
+			watcher = pkg.NewWatcher(
+				ghClient,
+				scanner,
+				realPublisher,
+				metrics,
+				cursorPath,
+				"bborbe",
+				cycleFilter,
+			)
+			ghClient.ListReposReturns([]pkg.Repo{
+				{Owner: "bborbe", Name: "repo-a", DefaultBranch: "main"},
+			}, nil)
+			ghClient.GetGoModReturns([]byte("module example.com/x\n"), nil)
+			ghClient.GetMaintainerConfigReturns(filter.GrantedConsent, nil)
+			scanner.ScanReturns(pkg.ScanResult{
+				HeadSHA: strings.Repeat("a", 40),
+				VulnIDs: []string{"GO-2024-1234"},
+			}, nil)
+
+			Expect(watcher.Poll(ctx, false)).To(Succeed())
+			Expect(gatherMetricValue(registry, "github_vuln_watcher_published_total",
+				map[string]string{"status": "error"})).To(Equal(1.0))
+
+			data, err := os.ReadFile(cursorPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(data)).NotTo(ContainSubstring("last_emitted_task_identifier"))
+
+			Expect(watcher.Poll(ctx, false)).To(Succeed())
+			Expect(sender.SendCommandCallCount()).To(Equal(2))
+		},
+	)
+
+	ginkgo.It("counts scan_error when the cursor cannot be saved", func() {
+		badPath := filepath.Join(
+			ginkgo.GinkgoT().TempDir(),
+			"nonexistent-dir",
+			"cursor.json",
+		)
+		watcher = pkg.NewWatcher(
+			ghClient, scanner, publisher, metrics, badPath, "bborbe", cycleFilter,
+		)
+
+		Expect(watcher.Poll(ctx, false)).To(Succeed())
+		Expect(gatherMetricValue(registry, "github_vuln_watcher_poll_cycle_total",
+			map[string]string{"result": "scan_error"})).To(Equal(1.0))
 	})
 })
