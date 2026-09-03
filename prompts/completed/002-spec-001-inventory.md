@@ -1,8 +1,13 @@
 ---
-status: approved
+status: completed
 spec: ["001"]
+summary: 'Added the inventory layer: GitHub App auth resolution (pkg/auth), read-only repo-listing and file-fetching client (pkg/githubclient), the pre-clone filter chain (pkg/filter: allowlist/consent/go.mod) and the watcher cycle that inventories the owner''s repos and applies the filters before any clone'
+execution_id: github-vuln-watcher-vuln-drift-watcher-exec-002-spec-001-inventory
+dark-factory-version: dev
 created: "2026-09-03T20:30:00Z"
 queued: "2026-09-03T18:43:31Z"
+started: "2026-09-03T18:49:30Z"
+completed: "2026-09-03T18:56:47Z"
 ---
 
 <summary>

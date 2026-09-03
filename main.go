@@ -13,6 +13,7 @@ import (
 	"github.com/bborbe/cqrs/base"
 	"github.com/bborbe/errors"
 	libhttp "github.com/bborbe/http"
+	"github.com/bborbe/maintainer/repoallowlist"
 	libmetrics "github.com/bborbe/metrics"
 	"github.com/bborbe/run"
 	libsentry "github.com/bborbe/sentry"
@@ -21,7 +22,9 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/bborbe/github-vuln-watcher/pkg"
+	"github.com/bborbe/github-vuln-watcher/pkg/auth"
 	"github.com/bborbe/github-vuln-watcher/pkg/factory"
+	"github.com/bborbe/github-vuln-watcher/pkg/filter"
 )
 
 const serviceName = "github-vuln-watcher"
@@ -67,8 +70,34 @@ func (a *application) Run(ctx context.Context, sentryClient libsentry.Client) er
 		return errors.Errorf(ctx, "poll interval %s exceeds the 24h maximum", a.PollInterval)
 	}
 
+	allowlist := filter.ParseRepoAllowlist(a.RepoAllowlist)
+	if err := repoallowlist.Validate(ctx, allowlist); err != nil {
+		return errors.Wrapf(ctx, err, "validate repo allowlist")
+	}
+	if len(allowlist) == 0 {
+		glog.V(2).Infof("repo-allowlist empty: allow-all within owner=%s", a.Owner)
+	} else {
+		glog.V(2).Infof("repo-allowlist count=%d", len(allowlist))
+	}
+
+	httpClient, err := auth.ResolveGitHubClient(ctx, auth.Credentials{
+		AppID:          a.AppID,
+		InstallationID: a.InstallationID,
+		PEMKey:         []byte(a.PEMKey),
+	})
+	if err != nil {
+		return errors.Wrapf(ctx, err, "resolve GitHub client")
+	}
+	defer httpClient.CloseIdleConnections()
+
 	metrics := pkg.NewMetrics(nil)
-	w := factory.CreateWatcher(metrics, a.CursorPath, a.Owner)
+	w := factory.CreateWatcher(
+		httpClient,
+		metrics,
+		a.CursorPath,
+		a.Owner,
+		factory.CreateStaticFilters(allowlist),
+	)
 	gate := pkg.NewCycleGate()
 	a.TriggerHandler = factory.CreateTriggerHandler(ctx, w, gate)
 

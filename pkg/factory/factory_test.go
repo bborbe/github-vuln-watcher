@@ -6,6 +6,7 @@ package factory_test
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/gorilla/mux"
 	. "github.com/onsi/ginkgo/v2"
@@ -15,6 +16,7 @@ import (
 	"github.com/bborbe/github-vuln-watcher/mocks"
 	"github.com/bborbe/github-vuln-watcher/pkg"
 	"github.com/bborbe/github-vuln-watcher/pkg/factory"
+	"github.com/bborbe/github-vuln-watcher/pkg/filter"
 )
 
 var _ = Describe("Factory", func() {
@@ -53,10 +55,64 @@ var _ = Describe("Factory", func() {
 
 	It("CreateWatcher returns a non-nil Watcher", func() {
 		watcher := factory.CreateWatcher(
+			&http.Client{},
 			pkg.NewMetrics(prometheus.NewRegistry()),
 			"/tmp/c.json",
 			"bborbe",
+			factory.CreateStaticFilters(nil),
 		)
 		Expect(watcher).NotTo(BeNil())
 	})
+})
+
+var _ = Describe("CreateStaticFilters", func() {
+	It("passes a fully-qualifying candidate with an empty allowlist", func() {
+		f := factory.CreateStaticFilters(nil)
+		Expect(f.Skip(filter.Candidate{
+			RepoKey:      "github.com/bborbe/x",
+			GoModPresent: true,
+			Consent:      filter.GrantedConsent,
+		})).To(Equal(""))
+	})
+
+	It("fires the consent gate before the go.mod gate in frozen chain order", func() {
+		f := factory.CreateStaticFilters(nil)
+		// With allow-all scope, an undecided consent fires auto_update_disabled
+		// even though go.mod is absent.
+		Expect(f.Skip(filter.Candidate{
+			RepoKey:      "github.com/bborbe/x",
+			GoModPresent: false,
+			Consent:      filter.UndecidedConsent,
+		})).To(Equal("auto_update_disabled"))
+	})
+
+	It("fires no_gomod once consent is granted and go.mod is absent", func() {
+		f := factory.CreateStaticFilters(nil)
+		Expect(f.Skip(filter.Candidate{
+			RepoKey:      "github.com/bborbe/x",
+			GoModPresent: false,
+			Consent:      filter.GrantedConsent,
+		})).To(Equal("no_gomod"))
+	})
+
+	It("skips a refused consent with auto_update_disabled despite go.mod presence", func() {
+		f := factory.CreateStaticFilters(nil)
+		Expect(f.Skip(filter.Candidate{
+			RepoKey:      "github.com/bborbe/x",
+			GoModPresent: true,
+			Consent:      filter.RefusedConsent,
+		})).To(Equal("auto_update_disabled"))
+	})
+
+	It(
+		"skips with scope for a repo outside a non-empty allowlist regardless of other fields",
+		func() {
+			f := factory.CreateStaticFilters([]string{"github.com/bborbe/a"})
+			Expect(f.Skip(filter.Candidate{
+				RepoKey:      "github.com/bborbe/other",
+				GoModPresent: true,
+				Consent:      filter.GrantedConsent,
+			})).To(Equal("scope"))
+		},
+	)
 })

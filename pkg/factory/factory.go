@@ -16,6 +16,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/bborbe/github-vuln-watcher/pkg"
+	"github.com/bborbe/github-vuln-watcher/pkg/filter"
 	"github.com/bborbe/github-vuln-watcher/pkg/handler"
 )
 
@@ -36,15 +37,32 @@ func CreateHealthzHandler() http.Handler {
 	return handler.NewHealthzHandler()
 }
 
-// CreateWatcher wires the watcher's current collaborators. Pure composition —
-// no I/O. The skeleton wires metrics, cursor path and owner; the remaining
-// spec layers add the inventory client, scan stage, publisher and filter chain.
+// CreateWatcher wires all watcher dependencies. Pure composition — no I/O.
 func CreateWatcher(
+	githubHTTPClient *http.Client,
 	metrics pkg.Metrics,
 	cursorPath string,
 	owner string,
+	taskCreationFilter filter.TaskCreationFilter,
 ) pkg.Watcher {
-	return pkg.NewWatcher(metrics, cursorPath, owner)
+	ghClient := pkg.NewGitHubClient(githubHTTPClient)
+	return pkg.NewWatcher(
+		ghClient,
+		metrics,
+		cursorPath,
+		owner,
+		taskCreationFilter,
+	)
+}
+
+// CreateStaticFilters builds the cycle-invariant pre-scan chain in its frozen
+// order (spec DB 2: allowlist -> consent -> go.mod presence).
+func CreateStaticFilters(allowlist []string) filter.TaskCreationFilter {
+	return filter.TaskCreationFilterList{
+		filter.NewRepoAllowlistFilter(allowlist),
+		filter.NewAutoUpdateFilter(),
+		filter.NewGoModPresentFilter(),
+	}
 }
 
 // CreateTriggerHandler wraps the forced-cycle handler in an http.Handler
