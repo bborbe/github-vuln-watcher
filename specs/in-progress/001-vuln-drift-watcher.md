@@ -1,7 +1,8 @@
 ---
-status: approved
+status: verifying
 approved: "2026-09-03T18:25:30Z"
 generating: "2026-09-03T18:25:31Z"
+verifying: "2026-09-03T19:48:34Z"
 branch: dark-factory/vuln-drift-watcher
 ---
 
@@ -141,3 +142,16 @@ Rationale: prompt 1 establishes the loop skeleton every later layer plugs into; 
 ## Do-Nothing Option
 
 Today the only vuln scan is a manual slash command. New vulnerabilities published against unchanged dependencies remain invisible to the fleet until a human runs the scan or a bump happens to trip CI — the drift (CI red, zero code change) has no automated reaction, and `github-update-go-agent`'s update flow has no vuln trigger to feed it. Unpatched dependencies ship and linger in prod between manual scans; the gap widens as the repo count grows. The current manual-only approach is not acceptable as the only mechanism.
+
+## Verification Result
+
+**Verified:** 2026-09-03T19:54:10Z (HEAD 7437790)
+**Binary:** worktree HEAD 7437790 (branch feature/vuln-drift-watcher); no deployed pod yet — AC8 verified-minus-live
+**Scenario:** no scenario file (spec declares none); runtime replay = fixture-repo dispatch integration test (real git clone + real make gates, mock kafka sender) + full test suite
+**Evidence:**
+- `make precommit` exit 0; `make test` exit 0 (pkg: 92/92 specs pass, 0 fail)
+- fixture dispatch: `fixture vuln marker: [GO-2024-1234 GO-2024-5678]`; 12-key contract asserted; published_total{status=create}=1
+- inventory gates: `filter_skipped_total auto_update_disabled=2 scope=1`; ScanCallCount=1 — no clone for skipped repos
+- dedup: `filter_skipped_total finding_set_unchanged=1`; 2nd cycle emits 0; cursor records `last_emitted_task_identifier`; corrupt cursor -> `.corrupt` + cycle success
+- greps: pkg/metrics.go:33 `github_vuln_watcher`; pkg/taskbuilder.go:38,70 `vulns`; pkg/cursor.go:35 `last_emitted_task_identifier`; main.go:46 `POLL_INTERVAL` default:"12h"
+**Verdict:** PASS (AC8 Post-Deploy deferred per spec Non-goals — verified-minus-live; follow-up: operator rung after Helm/quant deploy)
