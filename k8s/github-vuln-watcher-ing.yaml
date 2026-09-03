@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: github-vuln-watcher
+  namespace: '{{ "NAMESPACE" | env }}'
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: 'traefik'
+  rules:
+    - host: 'github-vuln-watcher.{{ "NAMESPACE" | env }}.quant.benjamin-borbe.de'
+      http:
+        paths:
+          - backend:
+              service:
+                name: github-vuln-watcher
+                port:
+                  name: http
+            path: /
+            pathType: Prefix
+  tls:
+    - secretName: tls-quant
+      hosts:
+        - 'github-vuln-watcher.{{ "NAMESPACE" | env }}.quant.benjamin-borbe.de'
