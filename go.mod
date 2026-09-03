@@ -3,11 +3,9 @@ module github.com/bborbe/github-vuln-watcher
 go 1.27.1
 
 require (
-	github.com/bborbe/boltkv v1.15.2
+	github.com/bborbe/cqrs v0.6.10
 	github.com/bborbe/errors v1.6.0
 	github.com/bborbe/http v1.26.25
-	github.com/bborbe/kafka v1.25.11
-	github.com/bborbe/kv v1.21.13
 	github.com/bborbe/log v1.6.25
 	github.com/bborbe/metrics v0.6.1
 	github.com/bborbe/run v1.10.2
@@ -26,7 +24,10 @@ require (
 	github.com/IBM/sarama v1.60.2 // indirect
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/bborbe/argument/v2 v2.13.2 // indirect
+	github.com/bborbe/boltkv v1.15.2 // indirect
 	github.com/bborbe/collection v1.20.25 // indirect
+	github.com/bborbe/kafka v1.25.11 // indirect
+	github.com/bborbe/kv v1.21.13 // indirect
 	github.com/bborbe/math v1.4.8 // indirect
 	github.com/bborbe/parse v1.11.0 // indirect
 	github.com/bborbe/validation v1.4.23 // indirect
@@ -38,6 +39,7 @@ require (
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/pprof v0.0.0-20260902005441-ca85771921e4 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
@@ -52,7 +54,6 @@ require (
 	github.com/prometheus/common v0.71.0 // indirect
 	github.com/prometheus/procfs v0.22.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
-	go.etcd.io/bbolt v1.5.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/mod v0.40.0 // indirect
