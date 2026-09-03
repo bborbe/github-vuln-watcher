@@ -1,8 +1,9 @@
 ---
-status: verifying
+status: completed
 approved: "2026-09-03T18:25:30Z"
 generating: "2026-09-03T18:25:31Z"
 verifying: "2026-09-03T19:48:34Z"
+completed: "2026-09-03T19:54:53Z"
 branch: dark-factory/vuln-drift-watcher
 ---
 
