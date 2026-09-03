@@ -31,8 +31,11 @@ type Watcher interface {
 // cycle-invariant pre-scan chain built at wiring time; the finding-set dedup
 // filter is composed in per cycle because it needs a fresh cursor (and is
 // omitted on a forced cycle) — that layer arrives in a later prompt.
+// scanner is the signal-stage collaborator that clones each consenting repo
+// and runs its own vuln gates.
 func NewWatcher(
 	ghClient GitHubClient,
+	scanner Scanner,
 	metrics Metrics,
 	cursorPath string,
 	owner string,
@@ -40,6 +43,7 @@ func NewWatcher(
 ) Watcher {
 	return &watcher{
 		ghClient:           ghClient,
+		scanner:            scanner,
 		metrics:            metrics,
 		cursorPath:         cursorPath,
 		owner:              owner,
@@ -49,6 +53,7 @@ func NewWatcher(
 
 type watcher struct {
 	ghClient           GitHubClient
+	scanner            Scanner
 	metrics            Metrics
 	cursorPath         string
 	owner              string
@@ -120,10 +125,45 @@ func (w *watcher) processRepos(
 			)
 			continue
 		}
-		// Repos that pass the pre-scan chain are scanned and emitted by the
-		// later spec layers.
+
+		// Signal stage: clone + the repo's own gates.
+		scanResult, scanErr := w.scanner.Scan(ctx, repo)
+		if scanErr != nil {
+			reason := classifyScanError(scanErr)
+			w.metrics.IncFilterSkipped(reason)
+			glog.V(2).Infof(
+				"repo skipped repo=%s reason=%s",
+				repo.Key(),
+				reason,
+			)
+			continue
+		}
+		if len(scanResult.VulnIDs) == 0 {
+			w.metrics.IncFilterSkipped("already_clean")
+			glog.V(2).Infof(
+				"repo skipped repo=%s reason=%s",
+				repo.Key(),
+				"already_clean",
+			)
+			continue
+		}
+		candidate.HeadSHA = scanResult.HeadSHA
+		candidate.VulnIDs = scanResult.VulnIDs
+		// Emit and dedup are added by the remaining spec layers.
 	}
 	return ""
+}
+
+// classifyScanError maps a Scanner error to its metric-label skip reason.
+func classifyScanError(err error) string {
+	switch {
+	case stderrors.Is(err, ErrCloneFailed):
+		return "clone_failed"
+	case stderrors.Is(err, ErrGateTimeout):
+		return "gate_timeout"
+	default:
+		return "scan_failed"
+	}
 }
 
 func (w *watcher) gatherCandidate(

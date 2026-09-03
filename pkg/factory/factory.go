@@ -37,6 +37,11 @@ func CreateHealthzHandler() http.Handler {
 	return handler.NewHealthzHandler()
 }
 
+// scanTimeout is the hard per-repo bound for the clone + gates scan (spec DB 3:
+// "Each gate invocation is bounded by a hard 20-minute timeout"). The scanner
+// receives it via the constructor so tests can use a short bound.
+const scanTimeout = 20 * time.Minute
+
 // CreateWatcher wires all watcher dependencies. Pure composition — no I/O.
 func CreateWatcher(
 	githubHTTPClient *http.Client,
@@ -46,8 +51,10 @@ func CreateWatcher(
 	taskCreationFilter filter.TaskCreationFilter,
 ) pkg.Watcher {
 	ghClient := pkg.NewGitHubClient(githubHTTPClient)
+	scanner := pkg.NewScanner(scanTimeout, "")
 	return pkg.NewWatcher(
 		ghClient,
+		scanner,
 		metrics,
 		cursorPath,
 		owner,

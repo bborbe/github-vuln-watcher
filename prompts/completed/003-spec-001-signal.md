@@ -1,8 +1,13 @@
 ---
-status: approved
+status: completed
 spec: ["001"]
+summary: 'Added the signal stage: a Scanner that full-clones each consenting repo (env allowlist HOME+PATH), runs the repo''s own make vulncheck + make check under a hard timeout, and classifies GO-/CVE- markers into a canonical list; wired it into the watcher per-repo loop and the factory with clone_failed / gate_timeout / scan_failed / already_clean outcomes'
+execution_id: github-vuln-watcher-vuln-drift-watcher-exec-003-spec-001-signal
+dark-factory-version: dev
 created: "2026-09-03T20:30:00Z"
 queued: "2026-09-03T18:43:31Z"
+started: "2026-09-03T18:56:48Z"
+completed: "2026-09-03T19:04:31Z"
 ---
 
 <summary>
