@@ -9,7 +9,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/bborbe/agent/command/task"
+	"github.com/bborbe/cqrs/base"
+	"github.com/bborbe/cqrs/cdb"
 	libhttp "github.com/bborbe/http"
+	libkafka "github.com/bborbe/kafka"
 	"github.com/bborbe/log"
 	libsentry "github.com/bborbe/sentry"
 	"github.com/gorilla/mux"
@@ -42,19 +46,33 @@ func CreateHealthzHandler() http.Handler {
 // receives it via the constructor so tests can use a short bound.
 const scanTimeout = 20 * time.Minute
 
+// CreateKafkaSender constructs the typed create-task command sender backed by
+// a Kafka sync producer.
+func CreateKafkaSender(
+	syncProducer libkafka.SyncProducer,
+	topicPrefix base.TopicPrefix,
+) task.CreateCommandSender {
+	sender := cdb.NewCommandObjectSender(syncProducer, topicPrefix, log.DefaultSamplerFactory)
+	return task.NewCreateCommandSender(sender, "")
+}
+
 // CreateWatcher wires all watcher dependencies. Pure composition — no I/O.
 func CreateWatcher(
 	githubHTTPClient *http.Client,
+	sender task.CreateCommandSender,
 	metrics pkg.Metrics,
 	cursorPath string,
 	owner string,
+	stage string,
 	taskCreationFilter filter.TaskCreationFilter,
 ) pkg.Watcher {
 	ghClient := pkg.NewGitHubClient(githubHTTPClient)
 	scanner := pkg.NewScanner(scanTimeout, "")
+	publisher := pkg.NewTaskPublisher(sender, metrics, pkg.TaskConfig{Stage: stage})
 	return pkg.NewWatcher(
 		ghClient,
 		scanner,
+		publisher,
 		metrics,
 		cursorPath,
 		owner,

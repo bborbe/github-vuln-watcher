@@ -49,7 +49,7 @@ var _ = ginkgo.Describe("Metrics", func() {
 		metrics = pkg.NewMetrics(registry)
 	})
 
-	ginkgo.It("exposes all four metric families after construction", func() {
+	ginkgo.It("exposes all five metric families after construction", func() {
 		families, err := registry.Gather()
 		Expect(err).NotTo(HaveOccurred())
 		names := make([]string, 0, len(families))
@@ -60,6 +60,7 @@ var _ = ginkgo.Describe("Metrics", func() {
 		Expect(names).To(ContainElement("github_vuln_watcher_published_total"))
 		Expect(names).To(ContainElement("github_vuln_watcher_repos_scanned_total"))
 		Expect(names).To(ContainElement("github_vuln_watcher_filter_skipped_total"))
+		Expect(names).To(ContainElement("github_vuln_watcher_vulns_detected_total"))
 	})
 
 	ginkgo.It("pre-initialises every label value to 0", func() {
@@ -101,6 +102,12 @@ var _ = ginkgo.Describe("Metrics", func() {
 	ginkgo.It("IncReposScanned adds to the plain counter", func() {
 		metrics.IncReposScanned(3)
 		Expect(gatherMetricValue(registry, "github_vuln_watcher_repos_scanned_total", nil)).
+			To(Equal(3.0))
+	})
+
+	ginkgo.It("IncVulnsDetected adds to the unlabelled counter", func() {
+		metrics.IncVulnsDetected(3)
+		Expect(gatherMetricValue(registry, "github_vuln_watcher_vulns_detected_total", nil)).
 			To(Equal(3.0))
 	})
 

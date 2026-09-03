@@ -28,6 +28,11 @@ type Metrics struct {
 	incReposScannedArgsForCall []struct {
 		arg1 int
 	}
+	IncVulnsDetectedStub        func(int)
+	incVulnsDetectedMutex       sync.RWMutex
+	incVulnsDetectedArgsForCall []struct {
+		arg1 int
+	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
@@ -157,6 +162,38 @@ func (fake *Metrics) IncReposScannedArgsForCall(i int) int {
 	fake.incReposScannedMutex.RLock()
 	defer fake.incReposScannedMutex.RUnlock()
 	argsForCall := fake.incReposScannedArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *Metrics) IncVulnsDetected(arg1 int) {
+	fake.incVulnsDetectedMutex.Lock()
+	fake.incVulnsDetectedArgsForCall = append(fake.incVulnsDetectedArgsForCall, struct {
+		arg1 int
+	}{arg1})
+	stub := fake.IncVulnsDetectedStub
+	fake.recordInvocation("IncVulnsDetected", []interface{}{arg1})
+	fake.incVulnsDetectedMutex.Unlock()
+	if stub != nil {
+		fake.IncVulnsDetectedStub(arg1)
+	}
+}
+
+func (fake *Metrics) IncVulnsDetectedCallCount() int {
+	fake.incVulnsDetectedMutex.RLock()
+	defer fake.incVulnsDetectedMutex.RUnlock()
+	return len(fake.incVulnsDetectedArgsForCall)
+}
+
+func (fake *Metrics) IncVulnsDetectedCalls(stub func(int)) {
+	fake.incVulnsDetectedMutex.Lock()
+	defer fake.incVulnsDetectedMutex.Unlock()
+	fake.IncVulnsDetectedStub = stub
+}
+
+func (fake *Metrics) IncVulnsDetectedArgsForCall(i int) int {
+	fake.incVulnsDetectedMutex.RLock()
+	defer fake.incVulnsDetectedMutex.RUnlock()
+	argsForCall := fake.incVulnsDetectedArgsForCall[i]
 	return argsForCall.arg1
 }
 

@@ -25,6 +25,9 @@ type Metrics interface {
 	// "no_gomod" | "clone_failed" | "gate_timeout" | "scan_failed" |
 	// "already_clean" | "finding_set_unchanged"
 	IncFilterSkipped(reason string)
+
+	// IncVulnsDetected adds n vuln markers found across a cycle (no labels).
+	IncVulnsDetected(n int)
 }
 
 const metricNamespace = "github_vuln_watcher"
@@ -86,7 +89,18 @@ func NewMetrics(registerer prometheus.Registerer) Metrics {
 		Name:      "filter_skipped_total",
 		Help:      "Total number of repos skipped by the filter chain by reason",
 	}, []string{"reason"})
-	registerer.MustRegister(pollCycle, published, reposScanned, filterSkipped)
+	vulnsDetected := prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: metricNamespace,
+		Name:      "vulns_detected_total",
+		Help:      "Total number of vuln markers detected",
+	})
+	registerer.MustRegister(
+		pollCycle,
+		published,
+		reposScanned,
+		filterSkipped,
+		vulnsDetected,
+	)
 	for _, label := range PollCycleResults {
 		pollCycle.WithLabelValues(label).Add(0)
 	}
@@ -101,6 +115,7 @@ func NewMetrics(registerer prometheus.Registerer) Metrics {
 		published:     published,
 		reposScanned:  reposScanned,
 		filterSkipped: filterSkipped,
+		vulnsDetected: vulnsDetected,
 	}
 }
 
@@ -109,6 +124,7 @@ type metricsImpl struct {
 	published     *prometheus.CounterVec
 	reposScanned  prometheus.Counter
 	filterSkipped *prometheus.CounterVec
+	vulnsDetected prometheus.Counter
 }
 
 // IncPollCycle increments the poll_cycle_total counter for the given result.
@@ -129,4 +145,9 @@ func (m *metricsImpl) IncReposScanned(n int) {
 // IncFilterSkipped increments the filter_skipped_total counter for the given reason.
 func (m *metricsImpl) IncFilterSkipped(reason string) {
 	m.filterSkipped.WithLabelValues(reason).Inc()
+}
+
+// IncVulnsDetected adds n vuln markers found across a cycle.
+func (m *metricsImpl) IncVulnsDetected(n int) {
+	m.vulnsDetected.Add(float64(n))
 }

@@ -34,6 +34,16 @@ func (c Candidate) ShortSHA() string {
 	return c.HeadSHA[:7]
 }
 
+// TaskIdentifier returns the deterministic UUID5 of the candidate's finding
+// set, or "" when no vulns are known yet. Seeded from (repo, sorted vuln IDs)
+// only — never from the HEAD SHA or a timestamp (spec Constraints).
+func (c Candidate) TaskIdentifier() string {
+	if len(c.VulnIDs) == 0 {
+		return ""
+	}
+	return DeriveVulnTaskID(c.Repo.Owner, c.Repo.Name, c.VulnIDs).String()
+}
+
 // FilterCandidate projects this observation onto the filter package's input.
 func (c Candidate) FilterCandidate() filter.Candidate {
 	return filter.Candidate{
@@ -41,6 +51,6 @@ func (c Candidate) FilterCandidate() filter.Candidate {
 		HeadSHA:        c.HeadSHA,
 		GoModPresent:   c.GoModPresent,
 		Consent:        c.Consent,
-		TaskIdentifier: "", // populated by the emit layer once the vuln list is known
+		TaskIdentifier: c.TaskIdentifier(),
 	}
 }

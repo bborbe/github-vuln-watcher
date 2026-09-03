@@ -25,6 +25,7 @@ var _ = ginkgo.Describe("Watcher", func() {
 		registry    *prometheus.Registry
 		ghClient    *mocks.GitHubClient
 		scanner     *mocks.Scanner
+		publisher   *mocks.TaskPublisher
 		cycleFilter filter.TaskCreationFilter
 	)
 
@@ -33,6 +34,8 @@ var _ = ginkgo.Describe("Watcher", func() {
 		registry = prometheus.NewRegistry()
 		ghClient = &mocks.GitHubClient{}
 		scanner = &mocks.Scanner{}
+		publisher = &mocks.TaskPublisher{}
+		publisher.PublishCreateReturns(true)
 		cycleFilter = filter.TaskCreationFilterList{
 			filter.NewRepoAllowlistFilter(nil),
 			filter.NewAutoUpdateFilter(),
@@ -41,6 +44,7 @@ var _ = ginkgo.Describe("Watcher", func() {
 		watcher = pkg.NewWatcher(
 			ghClient,
 			scanner,
+			publisher,
 			pkg.NewMetrics(registry),
 			"/tmp/cursor.json",
 			"bborbe",
@@ -238,5 +242,81 @@ var _ = ginkgo.Describe("Watcher", func() {
 		Expect(watcher.Poll(ctx, false)).To(Succeed())
 		Expect(gatherMetricValue(registry, "github_vuln_watcher_filter_skipped_total",
 			map[string]string{"reason": "already_clean"})).To(Equal(1.0))
+	})
+
+	ginkgo.It(
+		"emits exactly one publish per consenting repo with markers",
+		func() {
+			ghClient.ListReposReturns([]pkg.Repo{
+				{Owner: "bborbe", Name: "repo-a", DefaultBranch: "main"},
+			}, nil)
+			ghClient.GetGoModReturns([]byte("module example.com/x\n"), nil)
+			ghClient.GetMaintainerConfigReturns(filter.GrantedConsent, nil)
+			scanner.ScanReturns(pkg.ScanResult{
+				HeadSHA: strings.Repeat("a", 40),
+				VulnIDs: []string{"GO-2024-1234"},
+			}, nil)
+
+			Expect(watcher.Poll(ctx, false)).To(Succeed())
+
+			Expect(publisher.PublishCreateCallCount()).To(Equal(1))
+			_, published := publisher.PublishCreateArgsForCall(0)
+			Expect(published.VulnIDs).To(Equal([]string{"GO-2024-1234"}))
+			Expect(gatherMetricValue(registry, "github_vuln_watcher_vulns_detected_total", nil)).
+				To(Equal(1.0))
+			Expect(gatherMetricValue(registry, "github_vuln_watcher_poll_cycle_total",
+				map[string]string{"result": "success"})).To(Equal(1.0))
+		},
+	)
+
+	ginkgo.It("never publishes for a repo with zero markers", func() {
+		ghClient.ListReposReturns([]pkg.Repo{
+			{Owner: "bborbe", Name: "repo-a", DefaultBranch: "main"},
+		}, nil)
+		ghClient.GetGoModReturns([]byte("module example.com/x\n"), nil)
+		ghClient.GetMaintainerConfigReturns(filter.GrantedConsent, nil)
+		scanner.ScanReturns(pkg.ScanResult{}, nil)
+
+		Expect(watcher.Poll(ctx, false)).To(Succeed())
+
+		Expect(publisher.PublishCreateCallCount()).To(Equal(0))
+		Expect(gatherMetricValue(registry, "github_vuln_watcher_vulns_detected_total", nil)).
+			To(Equal(0.0))
+	})
+
+	ginkgo.It("does not abort the cycle when a publish fails", func() {
+		publisher.PublishCreateReturns(false)
+		ghClient.ListReposReturns([]pkg.Repo{
+			{Owner: "bborbe", Name: "repo-a", DefaultBranch: "main"},
+		}, nil)
+		ghClient.GetGoModReturns([]byte("module example.com/x\n"), nil)
+		ghClient.GetMaintainerConfigReturns(filter.GrantedConsent, nil)
+		scanner.ScanReturns(pkg.ScanResult{
+			HeadSHA: strings.Repeat("a", 40),
+			VulnIDs: []string{"GO-2024-1234"},
+		}, nil)
+
+		Expect(watcher.Poll(ctx, false)).To(Succeed())
+
+		Expect(publisher.PublishCreateCallCount()).To(Equal(1))
+		Expect(gatherMetricValue(registry, "github_vuln_watcher_poll_cycle_total",
+			map[string]string{"result": "success"})).To(Equal(1.0))
+	})
+
+	ginkgo.It("counts every marker on vulns_detected_total, not just one per repo", func() {
+		ghClient.ListReposReturns([]pkg.Repo{
+			{Owner: "bborbe", Name: "repo-a", DefaultBranch: "main"},
+		}, nil)
+		ghClient.GetGoModReturns([]byte("module example.com/x\n"), nil)
+		ghClient.GetMaintainerConfigReturns(filter.GrantedConsent, nil)
+		scanner.ScanReturns(pkg.ScanResult{
+			HeadSHA: strings.Repeat("a", 40),
+			VulnIDs: []string{"GO-2024-1234", "GO-2024-5678"},
+		}, nil)
+
+		Expect(watcher.Poll(ctx, false)).To(Succeed())
+
+		Expect(gatherMetricValue(registry, "github_vuln_watcher_vulns_detected_total", nil)).
+			To(Equal(2.0))
 	})
 })

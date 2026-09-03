@@ -1,8 +1,13 @@
 ---
-status: approved
+status: completed
 spec: ["001"]
+summary: 'Added the vuln-fork emit layer: deterministic UUID5 task identifier (frozen namespace + vuln-drift seed), frozen 12-key create-task builder (vuln_count + sorted vulns, dash title, byte-frozen body), TaskPublisher with published_total{create|error} accounting, vulns_detected_total counter, cqrs Kafka sender + watcher/factory/main wiring, plus k8s.io v0.36.4 replace directives to keep go mod tidy resolvable'
+execution_id: github-vuln-watcher-vuln-drift-watcher-exec-004-spec-001-emit
+dark-factory-version: dev
 created: "2026-09-03T20:30:00Z"
 queued: "2026-09-03T18:43:31Z"
+started: "2026-09-03T19:04:32Z"
+completed: "2026-09-03T19:15:54Z"
 ---
 
 <summary>

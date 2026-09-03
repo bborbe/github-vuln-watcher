@@ -13,6 +13,7 @@ import (
 	"github.com/bborbe/cqrs/base"
 	"github.com/bborbe/errors"
 	libhttp "github.com/bborbe/http"
+	libkafka "github.com/bborbe/kafka"
 	"github.com/bborbe/maintainer/repoallowlist"
 	libmetrics "github.com/bborbe/metrics"
 	"github.com/bborbe/run"
@@ -90,12 +91,29 @@ func (a *application) Run(ctx context.Context, sentryClient libsentry.Client) er
 	}
 	defer httpClient.CloseIdleConnections()
 
+	syncProducer, err := libkafka.NewSyncProducerWithName(
+		ctx,
+		libkafka.ParseBrokersFromString(a.KafkaBrokers),
+		serviceName,
+	)
+	if err != nil {
+		return errors.Wrapf(ctx, err, "create kafka sync producer")
+	}
+	defer func() {
+		if cerr := syncProducer.Close(); cerr != nil {
+			glog.Warningf("close kafka sync producer: %v", cerr)
+		}
+	}()
+
 	metrics := pkg.NewMetrics(nil)
+	sender := factory.CreateKafkaSender(syncProducer, a.TopicPrefix)
 	w := factory.CreateWatcher(
 		httpClient,
+		sender,
 		metrics,
 		a.CursorPath,
 		a.Owner,
+		a.Stage,
 		factory.CreateStaticFilters(allowlist),
 	)
 	gate := pkg.NewCycleGate()

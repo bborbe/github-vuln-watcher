@@ -32,10 +32,12 @@ type Watcher interface {
 // filter is composed in per cycle because it needs a fresh cursor (and is
 // omitted on a forced cycle) — that layer arrives in a later prompt.
 // scanner is the signal-stage collaborator that clones each consenting repo
-// and runs its own vuln gates.
+// and runs its own vuln gates. publisher emits one CreateTaskCommand per
+// finding set after the scan.
 func NewWatcher(
 	ghClient GitHubClient,
 	scanner Scanner,
+	publisher TaskPublisher,
 	metrics Metrics,
 	cursorPath string,
 	owner string,
@@ -44,6 +46,7 @@ func NewWatcher(
 	return &watcher{
 		ghClient:           ghClient,
 		scanner:            scanner,
+		publisher:          publisher,
 		metrics:            metrics,
 		cursorPath:         cursorPath,
 		owner:              owner,
@@ -54,6 +57,7 @@ func NewWatcher(
 type watcher struct {
 	ghClient           GitHubClient
 	scanner            Scanner
+	publisher          TaskPublisher
 	metrics            Metrics
 	cursorPath         string
 	owner              string
@@ -149,7 +153,15 @@ func (w *watcher) processRepos(
 		}
 		candidate.HeadSHA = scanResult.HeadSHA
 		candidate.VulnIDs = scanResult.VulnIDs
-		// Emit and dedup are added by the remaining spec layers.
+		w.metrics.IncVulnsDetected(len(scanResult.VulnIDs))
+
+		// PublishCreate emits one CreateTaskCommand for this finding set and
+		// reports whether the send succeeded. The dedup layer (next prompt)
+		// records the emitted task identifier in the cursor here, only on a
+		// successful publish; a failed publish returns false and does not
+		// advance cursor state (next cycle re-emits; the deterministic
+		// identifier absorbs the repeat downstream).
+		_ = w.publisher.PublishCreate(ctx, candidate)
 	}
 	return ""
 }

@@ -37,4 +37,35 @@ var _ = ginkgo.Describe("Candidate", func() {
 		Expect(fc.Consent).To(Equal(filter.GrantedConsent))
 		Expect(fc.TaskIdentifier).To(Equal(""))
 	})
+
+	ginkgo.It("TaskIdentifier is empty until vulns are known", func() {
+		c := pkg.Candidate{
+			Repo:    pkg.Repo{Owner: "bborbe", Name: "repo-a", DefaultBranch: "main"},
+			HeadSHA: "0123456789abcdef",
+		}
+		Expect(c.TaskIdentifier()).To(Equal(""))
+	})
+
+	ginkgo.It("TaskIdentifier is a deterministic UUID5 of the finding set", func() {
+		c := pkg.Candidate{
+			Repo:    pkg.Repo{Owner: "bborbe", Name: "repo-a", DefaultBranch: "main"},
+			HeadSHA: "0123456789abcdef",
+			VulnIDs: []string{"GO-2024-1234", "GO-2024-5678"},
+		}
+		a := c.TaskIdentifier()
+		b := c.TaskIdentifier()
+		Expect(a).NotTo(Equal(""))
+		Expect(a).To(Equal(b))
+		Expect(pkg.DeriveVulnTaskID("bborbe", "repo-a", c.VulnIDs).String()).
+			To(Equal(a))
+	})
+
+	ginkgo.It("FilterCandidate projects the derived task identifier once vulns are known", func() {
+		c := pkg.Candidate{
+			Repo:    pkg.Repo{Owner: "bborbe", Name: "repo-a", DefaultBranch: "main"},
+			HeadSHA: "0123456789abcdef",
+			VulnIDs: []string{"GO-2024-1234"},
+		}
+		Expect(c.FilterCandidate().TaskIdentifier).To(Equal(c.TaskIdentifier()))
+	})
 })

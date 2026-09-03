@@ -53,12 +53,14 @@ var _ = Describe("Factory", func() {
 		Expect(paths).NotTo(ContainElement("/resetbucket/foo"))
 	})
 
-	It("CreateWatcher returns a non-nil Watcher", func() {
+	It("CreateWatcher wires the publisher/sender seam and returns a non-nil Watcher", func() {
 		watcher := factory.CreateWatcher(
 			&http.Client{},
+			&mocks.CreateCommandSender{},
 			pkg.NewMetrics(prometheus.NewRegistry()),
 			"/tmp/c.json",
 			"bborbe",
+			"dev",
 			factory.CreateStaticFilters(nil),
 		)
 		Expect(watcher).NotTo(BeNil())
