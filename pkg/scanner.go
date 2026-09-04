@@ -25,6 +25,28 @@ import (
 // or non-zero exit). Callers map it to filter reason "clone_failed".
 var ErrCloneFailed = stderrors.New("git clone failed")
 
+// ParseGateTargets parses a comma-separated make-target list (the scanner's
+// per-repo gate sequence). Whitespace is trimmed and empty entries dropped; an
+// empty result falls back to the canonical "vulncheck,check" pair so a missing
+// or blank GATE_TARGETS never produces a scanner that runs zero gates.
+func ParseGateTargets(raw string) []string {
+	if raw == "" {
+		return []string{"vulncheck", "check"}
+	}
+	var targets []string
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		targets = append(targets, entry)
+	}
+	if len(targets) == 0 {
+		return []string{"vulncheck", "check"}
+	}
+	return targets
+}
+
 // ErrGateTimeout is returned when the per-repo time bound expires during the
 // clone or one of the repo's gates. Callers map it to "gate_timeout".
 var ErrGateTimeout = stderrors.New("gate timed out")
@@ -57,9 +79,9 @@ type ScanResult struct {
 // is applied only by the repo's own gates, never here.
 type Scanner interface {
 	// Scan clones repo (full clone from repo.CloneURL, never shallow) into
-	// an ephemeral directory, runs the repo's own `make vulncheck` and
-	// `make check`, and returns the canonical marker list plus the cloned
-	// HEAD SHA.
+	// an ephemeral directory, runs the repo's own configured gate targets
+	// (`make <target>` for each, default `vulncheck` then `check`), and
+	// returns the canonical marker list plus the cloned HEAD SHA.
 	//
 	// Classified errors (callers map to skip reasons):
 	//   - ErrCloneFailed  -> "clone_failed"  (git clone exec error or non-zero exit)
@@ -71,19 +93,24 @@ type Scanner interface {
 
 // NewScanner returns a Scanner that clones with the git binary and runs the
 // repo's own gates. gateTimeout is the hard bound for the whole per-repo scan
-// (clone + both gates) — 20 minutes in production wiring. tempDir is the
-// parent for the ephemeral clone directories ("" = system temp; fixture tests
-// pass a dedicated root to assert clone-dir cleanup).
-func NewScanner(gateTimeout time.Duration, tempDir string) Scanner {
+// (clone + all gates) — 20 minutes in production wiring. gateTargets is the
+// ordered make-target list to run (production default "vulncheck,check";
+// deploy manifests may trim it to "vulncheck" alone when the full `make
+// check` compile over a monorepo exceeds the pod memory budget). tempDir is
+// the parent for the ephemeral clone directories ("" = system temp; fixture
+// tests pass a dedicated root to assert clone-dir cleanup).
+func NewScanner(gateTimeout time.Duration, tempDir string, gateTargets []string) Scanner {
 	return &scanner{
 		gateTimeout: gateTimeout,
 		tempDir:     tempDir,
+		gateTargets: gateTargets,
 	}
 }
 
 type scanner struct {
 	gateTimeout time.Duration
 	tempDir     string
+	gateTargets []string
 }
 
 // scanEnv is the subprocess environment allowlist. Gate subprocesses run the
@@ -196,7 +223,7 @@ func (s *scanner) Scan(ctx context.Context, repo Repo) (ScanResult, error) {
 
 	var combined bytes.Buffer
 	anyGateFailed := false
-	for _, target := range []string{"vulncheck", "check"} {
+	for _, target := range s.gateTargets {
 		// #nosec G204 -- make binary is hardcoded; target is a fixed loop
 		// constant, cloneDir is the ephemeral clone dir.
 		gate := exec.CommandContext(ctx, "make", target)
