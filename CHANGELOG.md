@@ -8,6 +8,11 @@ Please choose versions by [Semantic Versioning](http://semver.org/).
 * MINOR version when you add functionality in a backwards-compatible manner, and
 * PATCH version when you make backwards-compatible bug fixes.
 
+## Unreleased
+
+- fix: scan-stage clone uses HTTPS (`https://github.com/<owner>/<repo>.git`) instead of SSH — the runtime has no openssh-client and no SSH key by design (gates from cloned repos must never read a key), and the public fleet needs no auth for the scan. Emit-contract `clone_url` stays SSH for the agent.
+- fix: pre-call + outcome audit log lines around the boundary subprocess calls (git clone, make gate, git rev-parse HEAD) so scan failures are diagnosable from logs
+
 ## v0.1.1
 
 - fix: runtime image is deployable — replace scratch runtime with an alpine image carrying git, make, the Go toolchain, and trivy so the watcher can clone repos and run their vuln gates in-pod; publish-only Makefile.docker (semver-tagged), drop stale k8s/ + Makefile.k8s (deployment is the Helm chart)

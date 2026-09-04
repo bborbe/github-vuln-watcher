@@ -165,13 +165,18 @@ func (s *scanner) Scan(ctx context.Context, repo Repo) (ScanResult, error) {
 
 	cloneURL := repo.CloneURL
 	if cloneURL == "" {
-		cloneURL = fmt.Sprintf("git@github.com:%s/%s.git", repo.Owner, repo.Name)
+		// HTTPS, not SSH: the runtime image has no openssh-client and no SSH key
+		// (security isolation — gates from cloned repos must never read a key).
+		// The fleet is public, so an unauthenticated HTTPS clone works for the
+		// scan; the agent authenticates later for the fix.
+		cloneURL = fmt.Sprintf("https://github.com/%s/%s.git", repo.Owner, repo.Name)
 	}
 
 	// #nosec G204 -- git binary is hardcoded; cloneURL is the repo's own
 	// CloneURL or derived from charset-validated owner/name, cloneDir is a
 	// fresh MkdirTemp dir.
 	clone := exec.CommandContext(ctx, "git", "clone", cloneURL, cloneDir)
+	glog.Infof("git clone repo=%s url=%s", repo.Key(), cloneURL)
 	clone.Env = scanEnv()
 	configureSubprocess(clone)
 	out, cerr := clone.CombinedOutput()
@@ -187,6 +192,7 @@ func (s *scanner) Scan(ctx context.Context, repo Repo) (ScanResult, error) {
 		)
 		return ScanResult{}, ErrCloneFailed
 	}
+	glog.Infof("git clone ok repo=%s url=%s", repo.Key(), cloneURL)
 
 	var combined bytes.Buffer
 	anyGateFailed := false
@@ -194,6 +200,7 @@ func (s *scanner) Scan(ctx context.Context, repo Repo) (ScanResult, error) {
 		// #nosec G204 -- make binary is hardcoded; target is a fixed loop
 		// constant, cloneDir is the ephemeral clone dir.
 		gate := exec.CommandContext(ctx, "make", target)
+		glog.Infof("run gate repo=%s target=%s", repo.Key(), target)
 		gate.Dir = cloneDir
 		gate.Env = scanEnv()
 		configureSubprocess(gate)
@@ -208,7 +215,10 @@ func (s *scanner) Scan(ctx context.Context, repo Repo) (ScanResult, error) {
 			// exec-start failure (make missing, no Makefile) and non-zero exit
 			// are both recorded here; classification below decides whether this
 			// is a vuln-drift signal.
+			glog.Warningf("run gate failed repo=%s target=%s err=%v", repo.Key(), target, gerr)
 			anyGateFailed = true
+		} else {
+			glog.Infof("run gate ok repo=%s target=%s", repo.Key(), target)
 		}
 	}
 
@@ -250,12 +260,16 @@ func extractMarkers(output string) []string {
 func gitHeadSHA(ctx context.Context, dir string) (string, error) {
 	// #nosec G204 -- git binary is hardcoded; dir is the ephemeral clone dir.
 	cmd := exec.CommandContext(ctx, "git", "rev-parse", "HEAD")
+	glog.Infof("git rev-parse HEAD dir=%s", dir)
 	cmd.Dir = dir
 	cmd.Env = scanEnv()
 	configureSubprocess(cmd)
 	out, err := cmd.Output()
 	if err != nil {
+		glog.Warningf("git rev-parse failed dir=%s err=%v", dir, err)
 		return "", err
 	}
-	return strings.TrimSpace(string(out)), nil
+	sha := strings.TrimSpace(string(out))
+	glog.Infof("git rev-parse ok dir=%s sha=%s", dir, sha)
+	return sha, nil
 }
