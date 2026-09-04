@@ -1,5 +1,5 @@
 ARG DOCKER_REGISTRY=docker.prod.nuke.benjamin-borbe.de:443
-FROM ${DOCKER_REGISTRY}/golang:1.27.0 AS build
+FROM ${DOCKER_REGISTRY}/golang:1.27.1 AS build
 ARG BUILD_GIT_VERSION=dev
 ARG BUILD_GIT_COMMIT=none
 ARG BUILD_DATE=unknown
@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -o /main
 CMD ["/bin/bash"]
 
-FROM ${DOCKER_REGISTRY}/golang:1.27.0 AS toolchain
+FROM ${DOCKER_REGISTRY}/golang:1.27.1 AS toolchain
 # Go toolchain snapshot for the runtime: the watcher runs each repo's own
 # `make vulncheck` + `make check`, whose scanners/linters mostly run via
 # `go run tool@version` — the runtime needs a full Go toolchain.
@@ -32,7 +32,7 @@ FROM ${DOCKER_REGISTRY}/alpine:3.24 AS runtime
 # create PRs or compile GUI libs — leaner than the github-update-go-agent image.
 RUN apk --no-cache add ca-certificates curl bash git make gcc musl-dev github-cli jq \
  && curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-  | sh -s -- -b /usr/local/bin \
+  | sh -s -- -b /usr/local/bin v0.74.0 \
  && trivy --version
 COPY --from=toolchain /usr/local/go /usr/local/go
 ENV ZONEINFO=/zoneinfo.zip
@@ -58,4 +58,12 @@ COPY --from=build /main /main
 ENV BUILD_GIT_VERSION=${BUILD_GIT_VERSION}
 ENV BUILD_GIT_COMMIT=${BUILD_GIT_COMMIT}
 ENV BUILD_DATE=${BUILD_DATE}
+# Non-root: the runtime executes arbitrary gate scripts from cloned repos, so a
+# compromised gate must not run as root. USER nobody (uid 65534) matches the k8s
+# runAsUser/runAsNonRoot the Helm chart enforces. HOME points at /tmp because
+# the k8s manifest mounts readOnlyRootFilesystem with only /tmp (emptyDir) and
+# /data (PVC) writable — git and the go toolchain (GOCACHE/GOPATH) need a
+# writable HOME.
+ENV HOME=/tmp
+USER nobody
 ENTRYPOINT ["/main"]
