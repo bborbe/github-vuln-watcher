@@ -1,5 +1,13 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+Please choose versions by [Semantic Versioning](http://semver.org/).
+
+* MAJOR version when you make incompatible API changes,
+* MINOR version when you add functionality in a backwards-compatible manner, and
+* PATCH version when you make backwards-compatible bug fixes.
+
 ## Unreleased
 
 - fix: runtime image is deployable — replace scratch runtime with an alpine image carrying git, make, the Go toolchain, and trivy so the watcher can clone repos and run their vuln gates in-pod; publish-only Makefile.docker (semver-tagged), drop stale k8s/ + Makefile.k8s (deployment is the Helm chart)
