@@ -165,7 +165,11 @@ func (s *scanner) Scan(ctx context.Context, repo Repo) (ScanResult, error) {
 
 	cloneURL := repo.CloneURL
 	if cloneURL == "" {
-		cloneURL = fmt.Sprintf("git@github.com:%s/%s.git", repo.Owner, repo.Name)
+		// HTTPS, not SSH: the runtime image has no openssh-client and no SSH key
+		// (security isolation — gates from cloned repos must never read a key).
+		// The fleet is public, so an unauthenticated HTTPS clone works for the
+		// scan; the agent authenticates later for the fix.
+		cloneURL = fmt.Sprintf("https://github.com/%s/%s.git", repo.Owner, repo.Name)
 	}
 
 	// #nosec G204 -- git binary is hardcoded; cloneURL is the repo's own
