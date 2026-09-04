@@ -192,6 +192,7 @@ func (s *scanner) Scan(ctx context.Context, repo Repo) (ScanResult, error) {
 		)
 		return ScanResult{}, ErrCloneFailed
 	}
+	glog.Infof("git clone ok repo=%s url=%s", repo.Key(), cloneURL)
 
 	var combined bytes.Buffer
 	anyGateFailed := false
@@ -214,7 +215,10 @@ func (s *scanner) Scan(ctx context.Context, repo Repo) (ScanResult, error) {
 			// exec-start failure (make missing, no Makefile) and non-zero exit
 			// are both recorded here; classification below decides whether this
 			// is a vuln-drift signal.
+			glog.Warningf("run gate failed repo=%s target=%s err=%v", repo.Key(), target, gerr)
 			anyGateFailed = true
+		} else {
+			glog.Infof("run gate ok repo=%s target=%s", repo.Key(), target)
 		}
 	}
 
@@ -262,7 +266,10 @@ func gitHeadSHA(ctx context.Context, dir string) (string, error) {
 	configureSubprocess(cmd)
 	out, err := cmd.Output()
 	if err != nil {
+		glog.Warningf("git rev-parse failed dir=%s err=%v", dir, err)
 		return "", err
 	}
-	return strings.TrimSpace(string(out)), nil
+	sha := strings.TrimSpace(string(out))
+	glog.Infof("git rev-parse ok dir=%s sha=%s", dir, sha)
+	return sha, nil
 }
