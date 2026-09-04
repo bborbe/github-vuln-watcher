@@ -44,6 +44,7 @@ type application struct {
 	Owner         string `required:"true"  arg:"owner"          env:"OWNER"          usage:"GitHub owner / org to scan (e.g. bborbe)"`
 	RepoAllowlist string `required:"false" arg:"repo-allowlist" env:"REPO_ALLOWLIST" usage:"Comma-separated host-qualified repo allowlist (host/owner/repo); empty = allow-all within OWNER"`
 	PollInterval  string `required:"false" arg:"poll-interval"  env:"POLL_INTERVAL"  usage:"Poll interval (Go duration); must not exceed 24h"                                                default:"12h"`
+	GateTargets   string `required:"false" arg:"gate-targets"   env:"GATE_TARGETS"   usage:"Comma-separated make targets to run per repo (default: vulncheck,check)"                         default:"vulncheck,check"`
 	CursorPath    string `required:"false" arg:"cursor-path"    env:"CURSOR_PATH"    usage:"Persisted-memory path (mount a PVC)"                                                             default:"/data/cursor.json"`
 	KafkaBrokers  string `required:"true"  arg:"kafka-brokers"  env:"KAFKA_BROKERS"  usage:"Comma separated list of Kafka brokers"`
 
@@ -70,6 +71,8 @@ func (a *application) Run(ctx context.Context, sentryClient libsentry.Client) er
 	if pollInterval > 24*time.Hour {
 		return errors.Errorf(ctx, "poll interval %s exceeds the 24h maximum", a.PollInterval)
 	}
+
+	gateTargets := pkg.ParseGateTargets(a.GateTargets)
 
 	allowlist := filter.ParseRepoAllowlist(a.RepoAllowlist)
 	if err := repoallowlist.Validate(ctx, allowlist); err != nil {
@@ -115,6 +118,7 @@ func (a *application) Run(ctx context.Context, sentryClient libsentry.Client) er
 		a.Owner,
 		a.Stage,
 		factory.CreateStaticFilters(allowlist),
+		gateTargets,
 	)
 	gate := pkg.NewCycleGate()
 	a.TriggerHandler = factory.CreateTriggerHandler(ctx, w, gate)

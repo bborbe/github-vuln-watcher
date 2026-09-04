@@ -62,6 +62,7 @@ var _ = Describe("Factory", func() {
 			"bborbe",
 			"dev",
 			factory.CreateStaticFilters(nil),
+			[]string{"vulncheck", "check"},
 		)
 		Expect(watcher).NotTo(BeNil())
 	})

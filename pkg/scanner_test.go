@@ -57,7 +57,7 @@ var _ = ginkgo.Describe("Scanner", func() {
 	})
 
 	ginkgo.JustBeforeEach(func() {
-		scanner = pkg.NewScanner(gateTimeout, tempDir)
+		scanner = pkg.NewScanner(gateTimeout, tempDir, []string{"vulncheck", "check"})
 	})
 
 	ginkgo.It(
@@ -202,5 +202,17 @@ var _ = ginkgo.Describe("Scanner", func() {
 		result, err := scanner.Scan(ctx, pkg.Repo{Owner: "o", Name: "n", CloneURL: dir})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.VulnIDs).To(BeEmpty())
+	})
+})
+
+var _ = ginkgo.Describe("ParseGateTargets", func() {
+	ginkgo.It("returns the canonical pair on empty input", func() {
+		Expect(pkg.ParseGateTargets("")).To(Equal([]string{"vulncheck", "check"}))
+		Expect(pkg.ParseGateTargets("   ")).To(Equal([]string{"vulncheck", "check"}))
+	})
+
+	ginkgo.It("splits, trims, and drops empty entries", func() {
+		Expect(pkg.ParseGateTargets("vulncheck, check ,,lint")).
+			To(Equal([]string{"vulncheck", "check", "lint"}))
 	})
 })

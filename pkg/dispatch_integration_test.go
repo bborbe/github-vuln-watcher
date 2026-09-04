@@ -141,7 +141,7 @@ func newDispatchHarness(repos []pkg.Repo, allowlist []string) *dispatchHarness {
 		}
 	}
 
-	realScanner := pkg.NewScanner(time.Minute, h.scanRoot)
+	realScanner := pkg.NewScanner(time.Minute, h.scanRoot, []string{"vulncheck", "check"})
 	h.scanner = &mocks.Scanner{}
 	h.scanner.ScanStub = realScanner.Scan // real clone + real make, call-counted
 
