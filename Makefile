@@ -3,7 +3,7 @@ include Makefile.precommit
 include Makefile.docker
 include example.env
 
-SERVICE = bborbe/github-vuln-watcher
+SERVICE = github-vuln-watcher
 
 run:
 	@go run -mod=mod main.go \

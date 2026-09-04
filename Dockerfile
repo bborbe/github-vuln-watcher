@@ -31,7 +31,7 @@ FROM ${DOCKER_REGISTRY}/alpine:3.24 AS runtime
 # No Claude CLI / npm / X11 headers: this service emits tasks, it does not
 # create PRs or compile GUI libs — leaner than the github-update-go-agent image.
 RUN apk --no-cache add ca-certificates curl bash git make gcc musl-dev github-cli jq \
- && curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+ && curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/v0.74.0/contrib/install.sh \
   | sh -s -- -b /usr/local/bin v0.74.0 \
  && trivy --version
 COPY --from=toolchain /usr/local/go /usr/local/go
