@@ -11,6 +11,7 @@ Please choose versions by [Semantic Versioning](http://semver.org/).
 ## Unreleased
 
 - fix: scan-stage clone uses HTTPS (`https://github.com/<owner>/<repo>.git`) instead of SSH — the runtime has no openssh-client and no SSH key by design (gates from cloned repos must never read a key), and the public fleet needs no auth for the scan. Emit-contract `clone_url` stays SSH for the agent.
+- fix: pre-call audit log lines before the boundary subprocess calls (git clone, make gate, git rev-parse HEAD) so scan failures are diagnosable from logs
 
 ## v0.1.1
 

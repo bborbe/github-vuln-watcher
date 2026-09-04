@@ -176,6 +176,7 @@ func (s *scanner) Scan(ctx context.Context, repo Repo) (ScanResult, error) {
 	// CloneURL or derived from charset-validated owner/name, cloneDir is a
 	// fresh MkdirTemp dir.
 	clone := exec.CommandContext(ctx, "git", "clone", cloneURL, cloneDir)
+	glog.Infof("git clone repo=%s url=%s", repo.Key(), cloneURL)
 	clone.Env = scanEnv()
 	configureSubprocess(clone)
 	out, cerr := clone.CombinedOutput()
@@ -198,6 +199,7 @@ func (s *scanner) Scan(ctx context.Context, repo Repo) (ScanResult, error) {
 		// #nosec G204 -- make binary is hardcoded; target is a fixed loop
 		// constant, cloneDir is the ephemeral clone dir.
 		gate := exec.CommandContext(ctx, "make", target)
+		glog.Infof("run gate repo=%s target=%s", repo.Key(), target)
 		gate.Dir = cloneDir
 		gate.Env = scanEnv()
 		configureSubprocess(gate)
@@ -254,6 +256,7 @@ func extractMarkers(output string) []string {
 func gitHeadSHA(ctx context.Context, dir string) (string, error) {
 	// #nosec G204 -- git binary is hardcoded; dir is the ephemeral clone dir.
 	cmd := exec.CommandContext(ctx, "git", "rev-parse", "HEAD")
+	glog.Infof("git rev-parse HEAD dir=%s", dir)
 	cmd.Dir = dir
 	cmd.Env = scanEnv()
 	configureSubprocess(cmd)
