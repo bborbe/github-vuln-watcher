@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.1.0
 
 - fix: runtime image is deployable — replace scratch runtime with an alpine image carrying git, make, the Go toolchain, and trivy so the watcher can clone repos and run their vuln gates in-pod; publish-only Makefile.docker (semver-tagged), drop stale k8s/ + Makefile.k8s (deployment is the Helm chart)
 - feat: Add the JSON cursor (atomic tmp+rename persist, corrupt -> .corrupt recovery) and the finding_set_unchanged dedup filter, with a fixture-repo dispatch integration test proving the emit contract, skip-reason deltas and dedup end-to-end
