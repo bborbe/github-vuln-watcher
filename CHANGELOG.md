@@ -8,7 +8,7 @@ Please choose versions by [Semantic Versioning](http://semver.org/).
 * MINOR version when you add functionality in a backwards-compatible manner, and
 * PATCH version when you make backwards-compatible bug fixes.
 
-## Unreleased
+## v0.2.0
 
 - feat: `GATE_TARGETS` env configures the per-repo make-target sequence (comma-separated, default `vulncheck,check`); deploy manifests can trim it to `vulncheck` alone when the full `make check` compile over a large monorepo exceeds the pod memory budget — the vuln signal comes from `vulncheck`, `check` output is not consumed for emit
 
