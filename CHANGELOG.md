@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.1.0
 
 - feat: Add the JSON cursor (atomic tmp+rename persist, corrupt -> .corrupt recovery) and the finding_set_unchanged dedup filter, with a fixture-repo dispatch integration test proving the emit contract, skip-reason deltas and dedup end-to-end
 - feat: Emit one github-update-go create-task per finding set under the frozen 12-key contract (vuln_count + sorted vulns payload, dash-form title, deterministic UUID5 task id) via the cqrs create-task command sender, and count publishes on published_total{status=create|error}
