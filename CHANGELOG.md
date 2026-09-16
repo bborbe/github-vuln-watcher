@@ -8,7 +8,7 @@ Please choose versions by [Semantic Versioning](http://semver.org/).
 * MINOR version when you add functionality in a backwards-compatible manner, and
 * PATCH version when you make backwards-compatible bug fixes.
 
-## Unreleased
+## v0.3.0
 
 - feat: scan-stage clone authenticates as the watcher's GitHub App installation — the installation token reaches `git clone` through the process environment (`http.extraheader` via `GIT_CONFIG_*`) and never through the clone URL, argv, the clone directory, or a log line, while gate subprocesses keep the frozen `HOME`+`PATH` allowlist
 - feat: build the scan-stage token source from the same GitHub App credentials the inventory stage uses (per-scan `githubapp.MintIAT`, no cache, no refresh knob) and document the clone-credential security model in `docs/security-model.md`
