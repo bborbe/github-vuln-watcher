@@ -8,6 +8,11 @@ Please choose versions by [Semantic Versioning](http://semver.org/).
 * MINOR version when you add functionality in a backwards-compatible manner, and
 * PATCH version when you make backwards-compatible bug fixes.
 
+## Unreleased
+
+- feat: scan-stage clone authenticates as the watcher's GitHub App installation — the installation token reaches `git clone` through the process environment (`http.extraheader` via `GIT_CONFIG_*`) and never through the clone URL, argv, the clone directory, or a log line, while gate subprocesses keep the frozen `HOME`+`PATH` allowlist
+- feat: build the scan-stage token source from the same GitHub App credentials the inventory stage uses (per-scan `githubapp.MintIAT`, no cache, no refresh knob) and document the clone-credential security model in `docs/security-model.md`
+
 ## v0.2.2
 
 - chore: update github.com/bborbe/agent to v0.83.0, github.com/bborbe/cqrs to v0.6.8, github.com/bborbe/errors to v1.6.1, github.com/bborbe/http to v1.26.26, github.com/bborbe/kafka to v1.25.16, github.com/bborbe/log to v1.7.0, github.com/bborbe/maintainer to v0.50.0, github.com/bborbe/metrics to v0.6.3, github.com/bborbe/run to v1.10.3, github.com/bborbe/sentry to v1.10.2, github.com/bborbe/service to v1.10.13, github.com/bborbe/time to v1.27.14

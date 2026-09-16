@@ -84,15 +84,21 @@ func (a *application) Run(ctx context.Context, sentryClient libsentry.Client) er
 		glog.V(2).Infof("repo-allowlist count=%d", len(allowlist))
 	}
 
-	httpClient, err := auth.ResolveGitHubClient(ctx, auth.Credentials{
+	creds := auth.Credentials{
 		AppID:          a.AppID,
 		InstallationID: a.InstallationID,
 		PEMKey:         []byte(a.PEMKey),
-	})
+	}
+	httpClient, err := auth.ResolveGitHubClient(ctx, creds)
 	if err != nil {
 		return errors.Wrapf(ctx, err, "resolve GitHub client")
 	}
 	defer httpClient.CloseIdleConnections()
+
+	// The scan-stage clone authenticates as the same App installation as the
+	// inventory stage. Construction performs no I/O: a mint failure surfaces per
+	// scan and degrades to the unauthenticated clone.
+	tokenSource := auth.NewTokenSource(creds)
 
 	syncProducer, err := libkafka.NewSyncProducerWithName(
 		ctx,
@@ -119,6 +125,7 @@ func (a *application) Run(ctx context.Context, sentryClient libsentry.Client) er
 		a.Stage,
 		factory.CreateStaticFilters(allowlist),
 		gateTargets,
+		tokenSource,
 	)
 	gate := pkg.NewCycleGate()
 	a.TriggerHandler = factory.CreateTriggerHandler(ctx, w, gate)

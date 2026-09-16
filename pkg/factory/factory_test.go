@@ -63,8 +63,20 @@ var _ = Describe("Factory", func() {
 			"dev",
 			factory.CreateStaticFilters(nil),
 			[]string{"vulncheck", "check"},
+			nil,
 		)
 		Expect(watcher).NotTo(BeNil())
+	})
+
+	It("threads the token source into the scanner, nil when unconfigured", func() {
+		tokenSource := &mocks.TokenSource{}
+		Expect(pkg.TokenSourceOf(
+			factory.CreateScanner([]string{"vulncheck", "check"}, tokenSource),
+		)).To(BeIdenticalTo(tokenSource))
+
+		Expect(pkg.TokenSourceOf(
+			factory.CreateScanner([]string{"vulncheck", "check"}, nil),
+		)).To(BeNil())
 	})
 })
 

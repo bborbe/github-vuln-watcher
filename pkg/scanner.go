@@ -7,6 +7,7 @@ package pkg
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	stderrors "errors"
 	"fmt"
 	"os"
@@ -72,6 +73,17 @@ type ScanResult struct {
 	VulnIDs []string
 }
 
+//counterfeiter:generate -o ../mocks/token_source.go --fake-name TokenSource . TokenSource
+
+// TokenSource mints the credential the scan-stage clone authenticates with.
+// A nil TokenSource at the Scanner is the documented "unauthenticated" value:
+// the clone then runs exactly as it did before this change.
+type TokenSource interface {
+	// Token returns one fresh credential for a single scan. The returned
+	// value must never be logged, placed in argv, or written to disk.
+	Token(ctx context.Context) (string, error)
+}
+
 //counterfeiter:generate -o ../mocks/scanner.go --fake-name Scanner . Scanner
 
 // Scanner clones a repo and runs its own vuln gates. It is NOT a vuln
@@ -98,19 +110,85 @@ type Scanner interface {
 // deploy manifests may trim it to "vulncheck" alone when the full `make
 // check` compile over a monorepo exceeds the pod memory budget). tempDir is
 // the parent for the ephemeral clone directories ("" = system temp; fixture
-// tests pass a dedicated root to assert clone-dir cleanup).
-func NewScanner(gateTimeout time.Duration, tempDir string, gateTargets []string) Scanner {
+// tests pass a dedicated root to assert clone-dir cleanup). tokenSource mints
+// the credential the clone authenticates with; nil means the clone runs
+// unauthenticated, exactly as it did before the credential seam existed.
+func NewScanner(
+	gateTimeout time.Duration,
+	tempDir string,
+	gateTargets []string,
+	tokenSource TokenSource,
+) Scanner {
 	return &scanner{
 		gateTimeout: gateTimeout,
 		tempDir:     tempDir,
 		gateTargets: gateTargets,
+		tokenSource: tokenSource,
 	}
+}
+
+// TokenSourceOf returns the token source s was built with (nil when the
+// scanner clones unauthenticated). It exists so the wiring test can assert the
+// credential plumbing without widening the Scanner contract; it is
+// deliberately not part of the Scanner interface.
+func TokenSourceOf(s Scanner) TokenSource {
+	if sc, ok := s.(*scanner); ok {
+		return sc.tokenSource
+	}
+	return nil
 }
 
 type scanner struct {
 	gateTimeout time.Duration
 	tempDir     string
 	gateTargets []string
+	tokenSource TokenSource
+}
+
+// tokenMintTimeout bounds one installation-token mint. A hung mint must not
+// consume the per-scan budget: it would surface as a spurious clone_failed for
+// a repo whose clone was never attempted.
+const tokenMintTimeout = 30 * time.Second
+
+// credentialEnv returns the git environment-configuration entries that convey
+// token to the clone subprocess. git >= 2.31 reads GIT_CONFIG_COUNT /
+// GIT_CONFIG_KEY_<n> / GIT_CONFIG_VALUE_<n>; http.extraheader is not persisted
+// to .git/config, unlike a token embedded in the clone URL. The credential
+// lives in this slice only: never in the URL, never in argv, never on disk,
+// never in a log line.
+func credentialEnv(token string) []string {
+	header := "AUTHORIZATION: basic " +
+		base64.StdEncoding.EncodeToString([]byte("x-access-token:"+token))
+	return []string{
+		"GIT_CONFIG_COUNT=1",
+		"GIT_CONFIG_KEY_0=http.extraheader",
+		"GIT_CONFIG_VALUE_0=" + header,
+	}
+}
+
+// cloneEnv returns the clone subprocess's environment: the frozen HOME+PATH
+// allowlist plus, when a token source is configured, the git
+// environment-configuration entries carrying the installation credential. A
+// mint failure is logged at WARN with its cause and degrades to the
+// unauthenticated clone. The gate subprocesses never receive these entries —
+// they keep using scanEnv().
+func (s *scanner) cloneEnv(ctx context.Context, repo Repo) []string {
+	env := scanEnv()
+	if s.tokenSource == nil {
+		return env
+	}
+	mintCtx, cancel := context.WithTimeout(ctx, tokenMintTimeout)
+	defer cancel()
+	token, err := s.tokenSource.Token(mintCtx)
+	if err != nil {
+		glog.Warningf(
+			"mint installation token failed repo=%s err=%v; cloning unauthenticated",
+			repo.Key(),
+			err,
+		)
+		return env
+	}
+	return append(env, credentialEnv(token)...)
 }
 
 // scanEnv is the subprocess environment allowlist. Gate subprocesses run the
@@ -194,8 +272,10 @@ func (s *scanner) Scan(ctx context.Context, repo Repo) (ScanResult, error) {
 	if cloneURL == "" {
 		// HTTPS, not SSH: the runtime image has no openssh-client and no SSH key
 		// (security isolation — gates from cloned repos must never read a key).
-		// The fleet is public, so an unauthenticated HTTPS clone works for the
-		// scan; the agent authenticates later for the fix.
+		// The fleet is private, so the clone authenticates as the watcher's App
+		// installation; the token travels in the subprocess environment only
+		// (see cloneEnv), never in this URL — a URL-embedded token would land in
+		// remote.origin.url, where the repo's own Makefile could read it.
 		cloneURL = fmt.Sprintf("https://github.com/%s/%s.git", repo.Owner, repo.Name)
 	}
 
@@ -204,7 +284,7 @@ func (s *scanner) Scan(ctx context.Context, repo Repo) (ScanResult, error) {
 	// fresh MkdirTemp dir.
 	clone := exec.CommandContext(ctx, "git", "clone", cloneURL, cloneDir)
 	glog.Infof("git clone repo=%s url=%s", repo.Key(), cloneURL)
-	clone.Env = scanEnv()
+	clone.Env = s.cloneEnv(ctx, repo)
 	configureSubprocess(clone)
 	out, cerr := clone.CombinedOutput()
 	if cerr != nil {

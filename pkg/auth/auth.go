@@ -24,6 +24,11 @@ type Credentials struct {
 	AppID          int64
 	InstallationID int64
 	PEMKey         []byte
+	// BaseURL is the GitHub API base URL; empty means https://api.github.com.
+	// It mirrors githubapp.Config.BaseURL. Its consumer today is a test seam
+	// (httptest servers); a GitHub Enterprise deployment would be the
+	// production consumer, so it is not test-only state.
+	BaseURL string
 }
 
 // ResolveGitHubClient returns an *http.Client authenticated as the GitHub App
@@ -66,6 +71,7 @@ func ResolveGitHubClient(ctx context.Context, creds Credentials) (*http.Client, 
 				AppID:          creds.AppID,
 				InstallationID: creds.InstallationID,
 				PEM:            creds.PEMKey,
+				BaseURL:        creds.BaseURL,
 			},
 		)
 		if err != nil {

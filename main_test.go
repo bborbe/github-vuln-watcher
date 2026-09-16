@@ -36,6 +36,14 @@ var _ = Describe("Main", func() {
 		Expect(text).NotTo(ContainSubstring("BATCH_SIZE"))
 		Expect(text).To(ContainSubstring(`default:"12h"`))
 	})
+
+	It("wires the scan token source into the watcher", func() {
+		source, err := os.ReadFile("main.go")
+		Expect(err).NotTo(HaveOccurred())
+		text := string(source)
+		Expect(text).To(ContainSubstring("tokenSource := auth.NewTokenSource(creds)"))
+		Expect(text).To(MatchRegexp(`(?s)CreateWatcher\(.*?tokenSource,\s*\)`))
+	})
 })
 
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6@v6.12.2 -generate
