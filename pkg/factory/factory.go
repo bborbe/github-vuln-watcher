@@ -56,6 +56,13 @@ func CreateKafkaSender(
 	return task.NewCreateCommandSender(sender, "")
 }
 
+// CreateScanner builds the signal-stage scanner. tokenSource may be nil, which
+// is the documented "unauthenticated" value: the clone then runs without any
+// credential in its environment.
+func CreateScanner(gateTargets []string, tokenSource pkg.TokenSource) pkg.Scanner {
+	return pkg.NewScanner(scanTimeout, "", gateTargets, tokenSource)
+}
+
 // CreateWatcher wires all watcher dependencies. Pure composition — no I/O.
 func CreateWatcher(
 	githubHTTPClient *http.Client,
@@ -66,9 +73,10 @@ func CreateWatcher(
 	stage string,
 	taskCreationFilter filter.TaskCreationFilter,
 	gateTargets []string,
+	tokenSource pkg.TokenSource,
 ) pkg.Watcher {
 	ghClient := pkg.NewGitHubClient(githubHTTPClient)
-	scanner := pkg.NewScanner(scanTimeout, "", gateTargets, nil)
+	scanner := CreateScanner(gateTargets, tokenSource)
 	publisher := pkg.NewTaskPublisher(sender, metrics, pkg.TaskConfig{Stage: stage})
 	return pkg.NewWatcher(
 		ghClient,

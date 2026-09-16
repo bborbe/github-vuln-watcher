@@ -1,7 +1,13 @@
 ---
-status: draft
+status: completed
 spec: [002-private-repo-scan-clone-auth]
+summary: Threaded a per-scan GitHub App token source (githubapp.MintIAT) from the composition root through the watcher factory into the scanner, with a real-HTTP mint test, a wiring guard, and the clone-credential security rationale recorded in docs/security-model.md
+execution_id: github-vuln-watcher-private-clone-auth-exec-007-spec-002-token-source-wiring
+dark-factory-version: dev
 created: "2026-09-16T20:46:00Z"
+queued: "2026-09-16T21:20:53Z"
+started: "2026-09-16T21:20:55Z"
+completed: "2026-09-16T21:26:27Z"
 branch: dark-factory/private-repo-scan-clone-auth
 ---
 
