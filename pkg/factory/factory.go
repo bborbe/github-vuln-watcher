@@ -68,7 +68,7 @@ func CreateWatcher(
 	gateTargets []string,
 ) pkg.Watcher {
 	ghClient := pkg.NewGitHubClient(githubHTTPClient)
-	scanner := pkg.NewScanner(scanTimeout, "", gateTargets)
+	scanner := pkg.NewScanner(scanTimeout, "", gateTargets, nil)
 	publisher := pkg.NewTaskPublisher(sender, metrics, pkg.TaskConfig{Stage: stage})
 	return pkg.NewWatcher(
 		ghClient,

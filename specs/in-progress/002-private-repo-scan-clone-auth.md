@@ -1,5 +1,9 @@
 ---
-status: draft
+status: prompted
+approved: "2026-09-16T20:34:46Z"
+generating: "2026-09-16T20:35:46Z"
+prompted: "2026-09-16T21:02:42Z"
+branch: dark-factory/private-repo-scan-clone-auth
 ---
 
 ## Summary

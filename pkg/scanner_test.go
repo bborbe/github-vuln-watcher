@@ -57,7 +57,7 @@ var _ = ginkgo.Describe("Scanner", func() {
 	})
 
 	ginkgo.JustBeforeEach(func() {
-		scanner = pkg.NewScanner(gateTimeout, tempDir, []string{"vulncheck", "check"})
+		scanner = pkg.NewScanner(gateTimeout, tempDir, []string{"vulncheck", "check"}, nil)
 	})
 
 	ginkgo.It(
