@@ -1,8 +1,9 @@
 ---
-status: prompted
+status: verifying
 approved: "2026-09-17T07:53:31Z"
 generating: "2026-09-17T08:47:13Z"
 prompted: "2026-09-17T09:08:07Z"
+verifying: "2026-09-17T09:29:34Z"
 branch: dark-factory/bug-create-task-missing-target-vault
 ---
 
