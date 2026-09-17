@@ -41,6 +41,7 @@ type application struct {
 
 	Listen        string `required:"true"  arg:"listen"         env:"LISTEN"         usage:"HTTP listen address"`
 	Stage         string `required:"true"  arg:"stage"          env:"STAGE"          usage:"Deployment stage (dev|prod), stamped on every emitted task"`
+	TargetVault   string `required:"false" arg:"target-vault"   env:"TARGET_VAULT"   usage:"Vault slug stamped onto every emitted task; empty leaves the controller's legacy default"`
 	Owner         string `required:"true"  arg:"owner"          env:"OWNER"          usage:"GitHub owner / org to scan (e.g. bborbe)"`
 	RepoAllowlist string `required:"false" arg:"repo-allowlist" env:"REPO_ALLOWLIST" usage:"Comma-separated host-qualified repo allowlist (host/owner/repo); empty = allow-all within OWNER"`
 	PollInterval  string `required:"false" arg:"poll-interval"  env:"POLL_INTERVAL"  usage:"Poll interval (Go duration); must not exceed 24h"                                                default:"12h"`
@@ -123,6 +124,7 @@ func (a *application) Run(ctx context.Context, sentryClient libsentry.Client) er
 		a.CursorPath,
 		a.Owner,
 		a.Stage,
+		a.TargetVault,
 		factory.CreateStaticFilters(allowlist),
 		gateTargets,
 		tokenSource,
@@ -131,7 +133,7 @@ func (a *application) Run(ctx context.Context, sentryClient libsentry.Client) er
 	a.TriggerHandler = factory.CreateTriggerHandler(ctx, w, gate)
 
 	glog.V(2).
-		Infof("%s starting stage=%s owner=%s interval=%s cursor=%s listen=%s", serviceName, a.Stage, a.Owner, a.PollInterval, a.CursorPath, a.Listen)
+		Infof("%s starting stage=%s vault=%s owner=%s interval=%s cursor=%s listen=%s", serviceName, a.Stage, a.TargetVault, a.Owner, a.PollInterval, a.CursorPath, a.Listen)
 
 	return service.Run(ctx, a.pollLoop(w, gate, pollInterval), a.createHTTPServer(sentryClient))
 }

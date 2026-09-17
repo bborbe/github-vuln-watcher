@@ -155,6 +155,11 @@ func authFixtureMakefile(evidenceDir string, realGit string) string {
 			"grep -rlF -e \"$$(cat "+filepath.Join(evidenceDir, patternFile)+")\" .",
 		)
 	}
+	// make-probe is not a gate, and it is deliberately last so the fixture's
+	// default goal stays vulncheck. The spec runs it directly, with exactly
+	// HOME and PATH in its environment, to discover which variables make
+	// itself injects into a recipe on this platform — so the gate-environment
+	// allowlist can be derived rather than enumerated.
 	return "vulncheck:\n" +
 		probe("gate-env-vulncheck.txt", "env | sort") +
 		probe("remote-origin-url.txt", realGit+" config --get remote.origin.url") +
@@ -173,7 +178,9 @@ func authFixtureMakefile(evidenceDir string, realGit string) string {
 		"\t@exit 1\n" +
 		"check:\n" +
 		probe("gate-env-check.txt", "env | sort") +
-		"\t@echo \"check ok\"\n"
+		"\t@echo \"check ok\"\n" +
+		"make-probe:\n" +
+		probe("make-probe.txt", "(env | sort; echo MAKE_PROBE_RAN=1)")
 }
 
 // scanCapturingStderr runs fn with glog's WARN/INFO output redirected into a
@@ -200,6 +207,12 @@ func scanCapturingStderr(fn func(ctx context.Context) error) (string, error) {
 	Expect(f.Close()).To(Succeed())
 	return readFileString(f.Name()), scanErr
 }
+
+// makeProbeMarker is the line the make-probe recipe appends after dumping its
+// own environment. It is the proof that the probe ran: without it, a missing
+// or stale make-probe.txt would be indistinguishable from a capture that
+// succeeded and simply found nothing.
+const makeProbeMarker = "MAKE_PROBE_RAN"
 
 // authScanFixture is the shared per-spec setup for both describes below: a
 // fixture repo whose gates dump their own environment and clone directory
@@ -260,6 +273,47 @@ func (f *authScanFixture) evidenceLines(name string) []string {
 
 func (f *authScanFixture) invocations() []gitInvocation {
 	return recordedGitInvocations(f.recordRoot)
+}
+
+// probeMakeEnv runs the fixture Makefile's make-probe target with exactly HOME
+// and PATH in its environment and returns the set of variable names the recipe
+// saw — including makeProbeMarker, which the caller must strip. Everything
+// beyond HOME and PATH is make's own contribution on this platform, and that
+// contribution differs between GNU make and Apple's make; deriving it here is
+// what keeps the gate-environment assertion honest on both.
+func (f *authScanFixture) probeMakeEnv() map[string]bool {
+	cmd := exec.Command("make", "make-probe")
+	cmd.Dir = f.fixtureDir
+	cmd.Env = []string{
+		"HOME=" + os.Getenv("HOME"),
+		"PATH=" + os.Getenv("PATH"),
+	}
+	out, err := cmd.CombinedOutput()
+	Expect(err).NotTo(HaveOccurred(), "make make-probe: %s", out)
+
+	names := make(map[string]bool)
+	for _, line := range nonEmptyLines(
+		readFileString(filepath.Join(f.evidenceDir, "make-probe.txt")),
+	) {
+		names[strings.SplitN(line, "=", 2)[0]] = true
+	}
+	return names
+}
+
+// firstDisallowedEnvVar returns the name of the first entry in observed (a
+// list of NAME=value lines) that is not in allowed, or "" when every observed
+// name is allowed. This is the anti-widening half of the gate-environment
+// assertion: allowed is derived from the real make binary at test time, so a
+// variable that is neither HOME, PATH, nor something make introduced still
+// fails the check on every platform.
+func firstDisallowedEnvVar(observed []string, allowed map[string]bool) string {
+	for _, line := range observed {
+		name := strings.SplitN(line, "=", 2)[0]
+		if !allowed[name] {
+			return name
+		}
+	}
+	return ""
 }
 
 var _ = ginkgo.Describe("scan-stage clone credentials", func() {
@@ -325,29 +379,55 @@ var _ = ginkgo.Describe("scan-stage clone credentials", func() {
 
 	ginkgo.It("gives the scanned repo's own gates the frozen HOME+PATH allowlist", func() {
 		// An exact two-line equality can never pass: make injects its own
-		// variables (MAKELEVEL, MAKEFLAGS, MFLAGS, PWD) into every recipe's
-		// environment, so the gate sees six lines, not two. The allowlist is
-		// therefore asserted positively — every observed variable name must be
-		// one of HOME/PATH plus make's own four. An absence-only assertion
-		// could not catch a widening that introduced a *different* variable
-		// (KAFKA_BROKERS, SENTRY_DSN) that no denylist names.
-		makeInjected := map[string]bool{
-			"HOME": true, "PATH": true,
-			"MAKELEVEL": true, "MAKEFLAGS": true, "MFLAGS": true, "PWD": true,
+		// variables into every recipe's environment, so the gate sees more than
+		// two lines. WHICH variables those are is platform-dependent, so the
+		// allowed set is derived by running the real make binary on the
+		// fixture's make-probe target rather than enumerated here — a hardcoded
+		// list is exactly right on the platform it was written on and wrong on
+		// the next one. The check itself stays positive: every observed name
+		// must be allowed. An absence-only assertion could not catch a widening
+		// that introduced a *different* variable (KAFKA_BROKERS, SENTRY_DSN)
+		// that no denylist names.
+		probed := fixture.probeMakeEnv()
+		Expect(probed).To(HaveKey(makeProbeMarker),
+			"the make-probe target did not run, so nothing was derived")
+		delete(probed, makeProbeMarker)
+
+		allowed := map[string]bool{"HOME": true, "PATH": true}
+		beyond := map[string]bool{}
+		for name := range probed {
+			allowed[name] = true
+			if name != "HOME" && name != "PATH" {
+				beyond[name] = true
+			}
 		}
+		// The derivation must have produced something: an empty beyond set
+		// would mean the probe captured nothing and the check below would be
+		// vacuous.
+		Expect(beyond).NotTo(BeEmpty(), "the probe derived nothing beyond HOME and PATH")
+
 		for _, name := range []string{"gate-env-vulncheck.txt", "gate-env-check.txt"} {
 			lines := fixture.evidenceLines(name)
 			Expect(lines).To(ContainElement("HOME=" + os.Getenv("HOME")))
 			Expect(lines).To(ContainElement("PATH=" + os.Getenv("PATH")))
-			Expect(lines).To(ContainElement("MAKELEVEL=1"))
+
+			offender := firstDisallowedEnvVar(lines, allowed)
+			Expect(offender).To(BeEmpty(), "unexpected env var reached a gate: %s", offender)
+
+			// Positive control: a gate is a make recipe, so it must show at
+			// least one of the variables the probe derived. A gate invoked some
+			// other way would otherwise satisfy the check above vacuously.
+			sawMakeInjected := false
 			for _, line := range lines {
-				varName := strings.SplitN(line, "=", 2)[0]
-				Expect(makeInjected).To(HaveKey(varName),
-					"unexpected env var reached a gate: %s", line)
+				if beyond[strings.SplitN(line, "=", 2)[0]] {
+					sawMakeInjected = true
+				}
 				Expect(line).NotTo(MatchRegexp(`GIT_CONFIG|Authorization`))
 				Expect(line).NotTo(ContainSubstring(authSentinel))
 				Expect(line).NotTo(ContainSubstring(payload))
 			}
+			Expect(sawMakeInjected).To(BeTrue(),
+				"no make-injected variable reached the gate")
 		}
 	})
 
@@ -377,6 +457,42 @@ var _ = ginkgo.Describe("scan-stage clone credentials", func() {
 		Expect(logs).NotTo(ContainSubstring(authSentinel))
 		Expect(logs).NotTo(ContainSubstring(payload))
 		Expect(logs).NotTo(ContainSubstring("ghs_sent"))
+	})
+})
+
+var _ = ginkgo.Describe("firstDisallowedEnvVar", func() {
+	// The derived allowlist is HOME and PATH plus whatever make adds on this
+	// platform. The helper must tolerate that second part without tolerating
+	// anything else — the two specs below pin both directions.
+	ginkgo.It("derived allowlist rejects a variable neither HOME, PATH nor make added", func() {
+		allowed := map[string]bool{"HOME": true, "PATH": true, "INJECTED_BY_MAKE": true}
+		observed := []string{
+			"HOME=/root",
+			"PATH=/usr/bin",
+			"INJECTED_BY_MAKE=1",
+			"KAFKA_BROKERS=broker:9092",
+		}
+		Expect(firstDisallowedEnvVar(observed, allowed)).To(Equal("KAFKA_BROKERS"))
+	})
+
+	ginkgo.It("derived allowlist accepts a variable make added on this platform", func() {
+		fixture := newAuthScanFixture()
+		probed := fixture.probeMakeEnv()
+		Expect(probed).To(HaveKey(makeProbeMarker),
+			"the make-probe target did not run, so nothing was derived")
+		delete(probed, makeProbeMarker)
+
+		added := ""
+		for name := range probed {
+			if name != "HOME" && name != "PATH" {
+				added = name
+				break
+			}
+		}
+		Expect(added).NotTo(BeEmpty(), "the probe derived nothing beyond HOME and PATH")
+
+		observed := []string{"HOME=/root", "PATH=/usr/bin", added + "=1"}
+		Expect(firstDisallowedEnvVar(observed, probed)).To(BeEmpty())
 	})
 })
 
