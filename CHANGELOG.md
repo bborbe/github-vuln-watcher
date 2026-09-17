@@ -8,6 +8,10 @@ Please choose versions by [Semantic Versioning](http://semver.org/).
 * MINOR version when you add functionality in a backwards-compatible manner, and
 * PATCH version when you make backwards-compatible bug fixes.
 
+## Unreleased
+
+- fix: derive the gate-environment spec's allowed variable set from the real `make` binary at test time (`authFixtureMakefile` gains a `make-probe` target, `firstDisallowedEnvVar` does the comparison) instead of hardcoding make's own variables — the hardcoded list was complete on Linux but not on macOS, where Apple's make injects `MANPATH`, so the spec failed on every macOS checkout and took down the dark-factory baseline preflight that runs on the host
+
 ## v0.3.0
 
 - feat: scan-stage clone authenticates as the watcher's GitHub App installation — the installation token reaches `git clone` through the process environment (`http.extraheader` via `GIT_CONFIG_*`) and never through the clone URL, argv, the clone directory, or a log line, while gate subprocesses keep the frozen `HOME`+`PATH` allowlist
