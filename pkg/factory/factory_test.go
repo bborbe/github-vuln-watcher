@@ -7,6 +7,7 @@ package factory_test
 import (
 	"context"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
 	. "github.com/onsi/ginkgo/v2"
@@ -61,11 +62,18 @@ var _ = Describe("Factory", func() {
 			"/tmp/c.json",
 			"bborbe",
 			"dev",
+			"",
 			factory.CreateStaticFilters(nil),
 			[]string{"vulncheck", "check"},
 			nil,
 		)
 		Expect(watcher).NotTo(BeNil())
+	})
+
+	It("threads the target vault into the task config", func() {
+		source, err := os.ReadFile("factory.go")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(source)).To(MatchRegexp(`TaskConfig\{[^}]*TargetVault:\s*targetVault`))
 	})
 
 	It("threads the token source into the scanner, nil when unconfigured", func() {

@@ -6,6 +6,7 @@ package pkg_test
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	"github.com/google/uuid"
@@ -96,4 +97,33 @@ var _ = ginkgo.Describe("BuildCreateCommand", func() {
 		cmd := pkg.BuildCreateCommand(fixedCandidate(), pkg.TaskConfig{Stage: "prod"})
 		Expect(cmd.Frontmatter["stage"]).To(Equal("prod"))
 	})
+
+	ginkgo.It("stamps the target vault config from the task config", func() {
+		cmd := pkg.BuildCreateCommand(
+			fixedCandidate(),
+			pkg.TaskConfig{Stage: "dev", TargetVault: "agent"},
+		)
+		Expect(cmd.TargetVault).To(Equal("agent"))
+	})
+
+	ginkgo.It("omits the target vault from the wire form when the config leaves it empty", func() {
+		cmd := pkg.BuildCreateCommand(fixedCandidate(), pkg.TaskConfig{Stage: "dev"})
+		Expect(cmd.TargetVault).To(BeEmpty())
+		raw, err := json.Marshal(cmd)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(raw)).NotTo(ContainSubstring("targetVault"))
+	})
+
+	ginkgo.DescribeTable("rejects a target vault the CreateCommand validator refuses",
+		func(targetVault string) {
+			cmd := pkg.BuildCreateCommand(
+				fixedCandidate(),
+				pkg.TaskConfig{Stage: "dev", TargetVault: targetVault},
+			)
+			Expect(cmd.Validate(context.Background())).To(HaveOccurred())
+		},
+		ginkgo.Entry("uppercase and punctuation", "Agent!"),
+		ginkgo.Entry("underscore", "agent_x"),
+		ginkgo.Entry("path traversal", "agent/../etc"),
+	)
 })

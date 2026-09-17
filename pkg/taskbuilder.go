@@ -14,7 +14,8 @@ import (
 
 // TaskConfig groups per-task envelope settings.
 type TaskConfig struct {
-	Stage string // "dev" or "prod" — emitted as the `stage` field
+	Stage       string // "dev" or "prod" — emitted as the `stage` field
+	TargetVault string // vault slug — emitted as the `targetVault` field; empty = controller legacy default
 }
 
 // ComputeTaskTitle returns the frozen title form:
@@ -43,6 +44,7 @@ func BuildCreateCommand(c Candidate, cfg TaskConfig) task.CreateCommand {
 		TaskIdentifier: agentlib.TaskIdentifier(taskIDStr),
 		Frontmatter:    buildFrontmatter(c, taskIDStr, cfg),
 		Body:           buildTaskBody(c),
+		TargetVault:    cfg.TargetVault,
 	}
 }
 

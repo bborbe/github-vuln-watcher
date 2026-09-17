@@ -6,6 +6,7 @@ package pkg_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -150,7 +151,11 @@ func newDispatchHarness(repos []pkg.Repo, allowlist []string) *dispatchHarness {
 		h.sent = append(h.sent, cmd)
 		return nil
 	}
-	publisher := pkg.NewTaskPublisher(sender, metrics, pkg.TaskConfig{Stage: "dev"})
+	publisher := pkg.NewTaskPublisher(
+		sender,
+		metrics,
+		pkg.TaskConfig{Stage: "dev", TargetVault: "agent"},
+	)
 
 	h.watcher = pkg.NewWatcher(
 		ghClient,
@@ -226,6 +231,12 @@ var _ = Describe("dispatch round-trip", func() {
 		Expect(taskID[14]).To(Equal(uint8('5')))
 
 		Expect(cmd.Validate(context.Background())).To(Succeed())
+
+		raw, err := json.Marshal(cmd)
+		Expect(err).NotTo(HaveOccurred())
+		var wire map[string]any
+		Expect(json.Unmarshal(raw, &wire)).To(Succeed())
+		Expect(wire["targetVault"]).To(Equal("agent"))
 
 		Expect(cmd.Title).
 			To(Equal("Update Go fixture-owner-fixture-repo " + ref[:7]))

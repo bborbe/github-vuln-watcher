@@ -10,6 +10,7 @@ Please choose versions by [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- fix: the watcher stamps the configured `TARGET_VAULT` onto every emitted create-task command (`main.go` → `factory.CreateWatcher` → `pkg.TaskConfig` → `BuildCreateCommand`), so the controller materialises the task instead of skipping it as a vault mismatch; an unset value stays byte-identical on the wire via `omitempty`
 - fix: derive the gate-environment spec's allowed variable set from the real `make` binary at test time (`authFixtureMakefile` gains a `make-probe` target, `firstDisallowedEnvVar` does the comparison) instead of hardcoding make's own variables — the hardcoded list was complete on Linux but not on macOS, where Apple's make injects `MANPATH`, so the spec failed on every macOS checkout and took down the dark-factory baseline preflight that runs on the host
 
 ## v0.3.0

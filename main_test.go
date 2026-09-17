@@ -44,6 +44,21 @@ var _ = Describe("Main", func() {
 		Expect(text).To(ContainSubstring("tokenSource := auth.NewTokenSource(creds)"))
 		Expect(text).To(MatchRegexp(`(?s)CreateWatcher\(.*?tokenSource,\s*\)`))
 	})
+
+	It("passes the configured target vault into the watcher factory", func() {
+		source, err := os.ReadFile("main.go")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(source)).
+			To(MatchRegexp(`(?s)CreateWatcher\(.*?a\.TargetVault.*?tokenSource,\s*\)`))
+	})
+
+	It("names the configured target vault in the startup log", func() {
+		source, err := os.ReadFile("main.go")
+		Expect(err).NotTo(HaveOccurred())
+		text := string(source)
+		Expect(text).To(ContainSubstring("vault=%s"))
+		Expect(text).To(MatchRegexp(`(?s)Infof\([^)]*vault=%s[^)]*a\.TargetVault[^)]*\)`))
+	})
 })
 
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6@v6.12.2 -generate
