@@ -44,7 +44,7 @@ require (
 	github.com/bborbe/parse v1.12.3 // indirect
 	github.com/bborbe/strimzi v1.8.20 // indirect
 	github.com/bborbe/validation v1.5.4 // indirect
-	github.com/bborbe/vault-cli v0.169.4 // indirect
+	github.com/bborbe/vault-cli v0.169.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bradleyfalzon/ghinstallation/v2 v2.19.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
