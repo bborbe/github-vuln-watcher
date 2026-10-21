@@ -1,5 +1,5 @@
 ARG DOCKER_REGISTRY=docker.prod.nuke.benjamin-borbe.de:443
-FROM ${DOCKER_REGISTRY}/golang:1.27.2 AS build
+FROM ${DOCKER_REGISTRY}/golang:1.27.3 AS build
 ARG BUILD_GIT_VERSION=dev
 ARG BUILD_GIT_COMMIT=none
 ARG BUILD_DATE=unknown
@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -o /main
 CMD ["/bin/bash"]
 
-FROM ${DOCKER_REGISTRY}/golang:1.27.2 AS toolchain
+FROM ${DOCKER_REGISTRY}/golang:1.27.3 AS toolchain
 # Go toolchain snapshot for the runtime: the watcher runs each repo's own
 # `make vulncheck` + `make check`, whose scanners/linters mostly run via
 # `go run tool@version` — the runtime needs a full Go toolchain.
