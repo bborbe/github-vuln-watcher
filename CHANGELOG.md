@@ -8,7 +8,7 @@ Please choose versions by [Semantic Versioning](http://semver.org/).
 * MINOR version when you add functionality in a backwards-compatible manner, and
 * PATCH version when you make backwards-compatible bug fixes.
 
-## Unreleased
+## v0.4.0
 
 - feat: log one structured line per non-2xx GitHub API response at the HTTP client boundary — method, host, path, status, rate-limit resource, remaining quota, retry-after and a truncated body snippet, with `absent` for a missing header or body; never the full URL or a request header, and the response body is restored for the caller
 
