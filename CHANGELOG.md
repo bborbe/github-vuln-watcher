@@ -8,6 +8,10 @@ Please choose versions by [Semantic Versioning](http://semver.org/).
 * MINOR version when you add functionality in a backwards-compatible manner, and
 * PATCH version when you make backwards-compatible bug fixes.
 
+## Unreleased
+
+- feat: log one structured line per non-2xx GitHub API response at the HTTP client boundary — method, host, path, status, rate-limit resource, remaining quota, retry-after and a truncated body snippet, with `absent` for a missing header or body; never the full URL or a request header, and the response body is restored for the caller
+
 ## v0.3.6
 
 - chore: update Go to 1.27.3 and github.com/bborbe/agent to v0.112.0, github.com/bborbe/kafka to v1.28.4, github.com/bborbe/maintainer to v0.50.12, github.com/bborbe/sentry to v1.10.5, github.com/bborbe/service to v1.11.0, github.com/bborbe/time to v1.27.17
