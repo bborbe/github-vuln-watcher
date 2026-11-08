@@ -8,7 +8,7 @@ Please choose versions by [Semantic Versioning](http://semver.org/).
 * MINOR version when you add functionality in a backwards-compatible manner, and
 * PATCH version when you make backwards-compatible bug fixes.
 
-## Unreleased
+## v0.5.0
 
 - feat: build the image on a cluster — `make build BUILD_TARGET=<sun|nukedev|nukeprod> REF=<sha> VERSION=<tag>` renders `hack/build-job.yaml` and runs the build as a Job, pushing `docker.io/bborbe/github-vuln-watcher`; `BUILD_TARGET ?= local` keeps the existing local arm and its `check-version-tag` guard unchanged
 
