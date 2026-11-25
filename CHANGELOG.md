@@ -8,7 +8,7 @@ Please choose versions by [Semantic Versioning](http://semver.org/).
 * MINOR version when you add functionality in a backwards-compatible manner, and
 * PATCH version when you make backwards-compatible bug fixes.
 
-## Unreleased
+## v0.6.3
 
 - fix: stamp `assignee: vuln-fix-agent` on every emitted task, so vuln findings are claimed by the dedicated vuln lane instead of queueing behind routine dependency updates on `github-update-go-agent`'s single slot
 
