@@ -66,6 +66,7 @@ func CreateScanner(gateTargets []string, tokenSource pkg.TokenSource) pkg.Scanne
 // CreateWatcher wires all watcher dependencies. Pure composition — no I/O.
 func CreateWatcher(
 	githubHTTPClient *http.Client,
+	apiBaseURL string,
 	sender task.CreateCommandSender,
 	metrics pkg.Metrics,
 	cursorPath string,
@@ -76,7 +77,7 @@ func CreateWatcher(
 	gateTargets []string,
 	tokenSource pkg.TokenSource,
 ) pkg.Watcher {
-	ghClient := pkg.NewGitHubClient(githubHTTPClient)
+	ghClient := pkg.NewGitHubClient(githubHTTPClient, apiBaseURL)
 	scanner := CreateScanner(gateTargets, tokenSource)
 	publisher := pkg.NewTaskPublisher(
 		sender,

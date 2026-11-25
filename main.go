@@ -39,15 +39,16 @@ type application struct {
 	SentryDSN   string `required:"true"  arg:"sentry-dsn"   env:"SENTRY_DSN"   usage:"SentryDSN"    display:"length"`
 	SentryProxy string `required:"false" arg:"sentry-proxy" env:"SENTRY_PROXY" usage:"Sentry Proxy"`
 
-	Listen        string `required:"true"  arg:"listen"         env:"LISTEN"         usage:"HTTP listen address"`
-	Stage         string `required:"true"  arg:"stage"          env:"STAGE"          usage:"Deployment stage (dev|prod), stamped on every emitted task"`
-	TargetVault   string `required:"false" arg:"target-vault"   env:"TARGET_VAULT"   usage:"Vault slug stamped onto every emitted task; empty leaves the controller's legacy default"`
-	Owner         string `required:"true"  arg:"owner"          env:"OWNER"          usage:"GitHub owner / org to scan (e.g. bborbe)"`
-	RepoAllowlist string `required:"false" arg:"repo-allowlist" env:"REPO_ALLOWLIST" usage:"Comma-separated host-qualified repo allowlist (host/owner/repo); empty = allow-all within OWNER"`
-	PollInterval  string `required:"false" arg:"poll-interval"  env:"POLL_INTERVAL"  usage:"Poll interval (Go duration); must not exceed 24h"                                                default:"12h"`
-	GateTargets   string `required:"false" arg:"gate-targets"   env:"GATE_TARGETS"   usage:"Comma-separated make targets to run per repo (default: vulncheck,check)"                         default:"vulncheck,check"`
-	CursorPath    string `required:"false" arg:"cursor-path"    env:"CURSOR_PATH"    usage:"Persisted-memory path (mount a PVC)"                                                             default:"/data/cursor.json"`
-	KafkaBrokers  string `required:"true"  arg:"kafka-brokers"  env:"KAFKA_BROKERS"  usage:"Comma separated list of Kafka brokers"`
+	Listen        string `required:"true"  arg:"listen"         env:"LISTEN"              usage:"HTTP listen address"`
+	Stage         string `required:"true"  arg:"stage"          env:"STAGE"               usage:"Deployment stage (dev|prod), stamped on every emitted task"`
+	TargetVault   string `required:"false" arg:"target-vault"   env:"TARGET_VAULT"        usage:"Vault slug stamped onto every emitted task; empty leaves the controller's legacy default"`
+	Owner         string `required:"true"  arg:"owner"          env:"OWNER"               usage:"GitHub owner / org to scan (e.g. bborbe)"`
+	APIBaseURL    string `required:"false" arg:"api-base-url"   env:"GITHUB_API_BASE_URL" usage:"GitHub API base URL; empty uses https://api.github.com (GitHub Enterprise or a test server)"`
+	RepoAllowlist string `required:"false" arg:"repo-allowlist" env:"REPO_ALLOWLIST"      usage:"Comma-separated host-qualified repo allowlist (host/owner/repo); empty = allow-all within OWNER"`
+	PollInterval  string `required:"false" arg:"poll-interval"  env:"POLL_INTERVAL"       usage:"Poll interval (Go duration); must not exceed 24h"                                                default:"12h"`
+	GateTargets   string `required:"false" arg:"gate-targets"   env:"GATE_TARGETS"        usage:"Comma-separated make targets to run per repo (default: vulncheck,check)"                         default:"vulncheck,check"`
+	CursorPath    string `required:"false" arg:"cursor-path"    env:"CURSOR_PATH"         usage:"Persisted-memory path (mount a PVC)"                                                             default:"/data/cursor.json"`
+	KafkaBrokers  string `required:"true"  arg:"kafka-brokers"  env:"KAFKA_BROKERS"       usage:"Comma separated list of Kafka brokers"`
 
 	TopicPrefix base.TopicPrefix `required:"false" arg:"topic-prefix" env:"TOPIC_PREFIX" usage:"Kafka topic prefix for CQRS topic construction"`
 
@@ -89,6 +90,7 @@ func (a *application) Run(ctx context.Context, sentryClient libsentry.Client) er
 		AppID:          a.AppID,
 		InstallationID: a.InstallationID,
 		PEMKey:         []byte(a.PEMKey),
+		BaseURL:        a.APIBaseURL,
 	}
 	httpClient, err := auth.ResolveGitHubClient(ctx, creds)
 	if err != nil {
@@ -119,6 +121,7 @@ func (a *application) Run(ctx context.Context, sentryClient libsentry.Client) er
 	sender := factory.CreateKafkaSender(syncProducer, a.TopicPrefix)
 	w := factory.CreateWatcher(
 		httpClient,
+		a.APIBaseURL,
 		sender,
 		metrics,
 		a.CursorPath,
@@ -153,6 +156,7 @@ func (a *application) pollLoop(
 			return
 		}
 		defer gate.Release()
+		glog.V(2).Infof("poll cycle start stage=%s", a.Stage)
 		// The interval loop is the dedup-engaged path; force=true comes
 		// exclusively from the /trigger endpoint.
 		if err := w.Poll(ctx, false); err != nil {
