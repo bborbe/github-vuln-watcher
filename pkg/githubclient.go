@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/bborbe/errors"
 	libhttp "github.com/bborbe/http"
@@ -114,9 +115,16 @@ func NewGitHubClient(httpClient *http.Client, apiBaseURL string) GitHubClient {
 
 	// NewClient copies the http.Client struct, so the transport must be
 	// assigned before the constructor call or the wrapper is silently dropped.
+	// The auth client sets a 30s Timeout, which bounds the whole request —
+	// including any retry wait taken inside this transport. Cap MaxWait below it
+	// so a longer Retry-After is deferred to the next cycle rather than killed
+	// mid-wait by the client timeout.
 	httpClient.Transport = libhttp.NewRoundTripperRetryWithBackoff(
 		limited,
-		libhttp.RetryBackoffOptions{RetryHosts: retryHosts},
+		libhttp.RetryBackoffOptions{
+			RetryHosts: retryHosts,
+			MaxWait:    20 * time.Second,
+		},
 	)
 	client := gogithub.NewClient(httpClient)
 	if apiBaseURL != "" {
