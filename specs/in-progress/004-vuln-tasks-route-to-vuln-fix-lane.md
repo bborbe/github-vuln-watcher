@@ -1,5 +1,7 @@
 ---
-status: draft
+status: approved
+approved: "2026-11-25T15:21:10Z"
+branch: dark-factory/vuln-tasks-route-to-vuln-fix-lane
 ---
 
 ## Summary
@@ -61,7 +63,7 @@ All four hold today and were read from the live configuration, not recalled; the
 |---|---|---|---|
 | Watcher deployed to a stage with no `vuln-fix-agent` lane | Tasks are published with an assignee nothing claims; they sit unclaimed | Add the lane to that stage's `agent/values-*.yaml` and apply, or roll the watcher back | An emitted task whose `assignee` names a lane absent from the stage's Config |
 | Lane present but its `taskTypes` drops `github-update-go` | Task matches no lane and is never claimed | Restore `github-update-go` to the lane's `taskTypes` | Emitted task unclaimed past its heartbeat |
-| A consumer asserts the old assignee | Nothing in the fleet reads the value — the controller routes on `assignee` alone, and no code matches the literal `github-update-go-agent` | n/a | `grep -rn 'github-update-go-agent'` over the fleet repos |
+| A consumer asserts the old assignee | Nothing in the fleet reads the value — the controller routes on `assignee` alone | n/a — prevented by the pre-merge check | Pre-merge: `grep -rn 'github-update-go-agent'` over the fleet repos returns 0 hits |
 
 ## Acceptance Criteria
 
@@ -70,10 +72,11 @@ All four hold today and were read from the live configuration, not recalled; the
 - [ ] `buildFrontmatter` stamps the vuln lane — evidence: `pkg/taskbuilder_test.go`'s `stamps the 10 consumer keys byte-identical to the sibling` asserts `cmd.Frontmatter["assignee"]` equals `vuln-fix-agent`, and `make test` exits 0.
 - [ ] The dispatch path emits the same value end to end, not only the builder in isolation — evidence: `pkg/dispatch_integration_test.go`'s publish assertion reads `cmd.Frontmatter["assignee"]` as `vuln-fix-agent` after a real `Poll`, and `make test` exits 0. (Guards the lazy "change the builder, leave the integration assertion green against the old value" implementation.)
 - [ ] The frontmatter key count is still exactly 12 — evidence: the existing `HaveLen(12)` assertions in both test files still pass with no edit to the count, and `make test` exits 0. (Guards the lazy "add a second assignee key" implementation.)
-- [ ] `task_type` is unchanged — evidence: both tests still assert `github-update-go`, and `grep -c '"task_type":       "github-update-go"' pkg/taskbuilder.go` returns `1`.
+- [ ] The task body is byte-identical — evidence: `pkg/taskbuilder_test.go`'s `builds the frozen body byte-identically` still passes **unedited**, and `git diff origin/master -- pkg/taskbuilder.go` shows a single changed line (the assignee value) with no body-building line touched.
+- [ ] `task_type` is unchanged — evidence: both tests still assert `github-update-go`, and `grep -c '"task_type".*"github-update-go"' pkg/taskbuilder.go` returns `1`.
 - [ ] No Go file still names the old lane — evidence: `grep -rn 'github-update-go-agent' --include='*.go' .` prints nothing.
 - [ ] The README describes the lane the watcher actually targets — evidence: `grep -n 'vuln-fix-agent' README.md` prints the line describing the emitted task's consumer.
-- [ ] `CHANGELOG.md` carries the change under a new `## Unreleased` heading — evidence: `awk '/^## /{sec=$0} /vuln-fix-agent/{print sec}' CHANGELOG.md` prints `## Unreleased`.
+- [ ] `CHANGELOG.md` carries the change under a new `## Unreleased` heading — evidence: `awk '/^## /{sec=$0} /vuln-fix-agent/{print sec}' CHANGELOG.md | sort -u` prints exactly one line, `## Unreleased`, and `grep -c '^## Unreleased$' CHANGELOG.md` prints `1`.
 - [ ] `make precommit` exits 0.
 
 ## Verification
