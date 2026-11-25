@@ -1,6 +1,10 @@
 ---
-status: approved
+status: completed
 approved: "2026-11-25T15:21:10Z"
+generating: "2026-11-25T18:32:54Z"
+prompted: "2026-11-25T18:39:16Z"
+verifying: "2026-11-25T18:49:32Z"
+completed: "2026-11-25T18:49:38Z"
 branch: dark-factory/vuln-tasks-route-to-vuln-fix-lane
 ---
 
