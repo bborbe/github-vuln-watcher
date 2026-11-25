@@ -13,7 +13,7 @@ require (
 	github.com/bborbe/agent v0.141.1
 	github.com/bborbe/cqrs v0.6.16
 	github.com/bborbe/errors v1.6.7
-	github.com/bborbe/http v1.26.34
+	github.com/bborbe/http v1.28.0
 	github.com/bborbe/kafka v1.29.14
 	github.com/bborbe/log v1.7.9
 	github.com/bborbe/maintainer v0.51.3

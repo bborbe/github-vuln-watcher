@@ -57,6 +57,7 @@ var _ = Describe("Factory", func() {
 	It("CreateWatcher wires the publisher/sender seam and returns a non-nil Watcher", func() {
 		watcher := factory.CreateWatcher(
 			&http.Client{},
+			"",
 			&mocks.CreateCommandSender{},
 			pkg.NewMetrics(prometheus.NewRegistry()),
 			"/tmp/c.json",

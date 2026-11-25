@@ -42,7 +42,7 @@ var _ = Describe("GitHubClient", func() {
 			http.Error(w, "no handler registered: "+r.URL.Path, http.StatusInternalServerError)
 		}))
 		serverURL = server.URL
-		client = pkg.NewGitHubClient(server.Client())
+		client = pkg.NewGitHubClient(server.Client(), "")
 		Expect(pkg.SetBaseURL(client, serverURL+"/")).To(Succeed())
 	})
 
