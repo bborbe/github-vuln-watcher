@@ -203,7 +203,7 @@ var _ = Describe("dispatch round-trip", func() {
 		cmd := h.sent[0]
 		Expect(cmd.Frontmatter).To(HaveLen(12))
 		Expect(cmd.Frontmatter["task_type"]).To(Equal("github-update-go"))
-		Expect(cmd.Frontmatter["assignee"]).To(Equal("github-update-go-agent"))
+		Expect(cmd.Frontmatter["assignee"]).To(Equal("vuln-fix-agent"))
 		Expect(cmd.Frontmatter["phase"]).To(Equal("planning"))
 		Expect(cmd.Frontmatter["status"]).To(Equal("in_progress"))
 		Expect(cmd.Frontmatter["stage"]).To(Equal("dev"))

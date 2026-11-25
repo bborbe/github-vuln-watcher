@@ -55,7 +55,7 @@ func buildFrontmatter(
 ) agentlib.TaskFrontmatter {
 	return agentlib.TaskFrontmatter{
 		"task_type":       "github-update-go",
-		"assignee":        "github-update-go-agent",
+		"assignee":        "vuln-fix-agent",
 		"phase":           "planning",
 		"status":          "in_progress",
 		"stage":           cfg.Stage,

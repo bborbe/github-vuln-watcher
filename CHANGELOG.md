@@ -8,6 +8,10 @@ Please choose versions by [Semantic Versioning](http://semver.org/).
 * MINOR version when you add functionality in a backwards-compatible manner, and
 * PATCH version when you make backwards-compatible bug fixes.
 
+## Unreleased
+
+- fix: stamp `assignee: vuln-fix-agent` on every emitted task, so vuln findings are claimed by the dedicated vuln lane instead of queueing behind routine dependency updates on `github-update-go-agent`'s single slot
+
 ## v0.6.2
 
 - fix: retry GitHub rate-limit responses with a bounded header-aware wait, defer waits over five minutes to the next poll cycle, and cap concurrent GitHub API requests
